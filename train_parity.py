@@ -137,12 +137,12 @@ def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
 
             msg = {'train_loss': loss.item()}
 
-            if i % 1000 == 0:
+            if i % 100 == 0:
                 valid_losses = do_validation(model, valid_dataloaders)
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item())
+                t.set_postfix(loss=loss.item(), valid_losses=valid_losses[100])
             
 
 
