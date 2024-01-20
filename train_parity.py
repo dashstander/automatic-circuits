@@ -176,7 +176,7 @@ def main(args):
     annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
-    train_dataset = CumulativeParityDataset(512, 6, 32, 1024, seed)
+    train_dataset = CumulativeParityDataset(512, 6, 32, 512, seed)
     valid_lengths = [32, 40, 50, 60, 70, 80, 90, 100]
     valid_datasets = {i: CumulativeParityFixed(512, i, 512, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
