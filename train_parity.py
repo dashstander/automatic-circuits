@@ -43,6 +43,21 @@ def generate_packed_parity(total_seq_length, min_seq_length=6, max_seq_length=30
     return np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
 
 
+def generate_fixed_parity(total_seq_length, seq_length=30, rng=None):
+    if rng is None:
+        rng = np.random.default_rng()
+    sep = 3
+    sequence_lengths = [seq_length] * (total_seq_length // seq_length)
+    assert sum(sequence_lengths) <= total_seq_length
+    parities = [
+            generate_cum_parity(seq_len, stream) for seq_len, stream in zip(sequence_lengths, rng.spawn(len(sequence_lengths)))
+    ]
+    parities = np.concatenate(parities)
+    diff = total_seq_length - len(parities)
+    return np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
+
+
+
 class CumulativeParityDataset(IterableDataset):
 
     def __init__(self, total_sequence_length: int, min_sequence_length: int, max_sequence_length: int, batch_size: int, rng_seed: int = 0):
@@ -72,21 +87,62 @@ class CumulativeParityDataset(IterableDataset):
             yield torch.asarray(np.stack(parities, axis=0))
 
 
-def train(model, optimizer, scheduler, num_steps, dataloader):
 
-    loader = iter(dataloader)
+class CumulativeParityFixed(IterableDataset):
+    def __init__(self, total_sequence_length: int, sequence_length: int, batch_size: int, rng_seed: int = 0):
+        super().__init__()
+        self.total_sequence_length = total_sequence_length
+        self.sequence_length = sequence_length
+        self.batch_size = batch_size
+        self.rng = np.random.default_rng(rng_seed)
+
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is not None:
+            all_rngs = [stream for stream in self.rng.spawn(worker_info.num_workers)]
+            rng = all_rngs[worker_info.id]
+        else:
+            rng = self.rng
+        while True:
+            parities = [
+                generate_fixed_parity(
+                    self.total_sequence_length,
+                    self.sequence_length,
+                    stream
+                ) for stream in rng.spawn(self.batch_size)
+            ]
+            yield torch.asarray(np.stack(parities, axis=0))
+
+
+@torch.no_grad()
+def do_validation(model, valid_dataloaders):
+    valid_losses = {}
+    for seq_len, dataloader in valid_dataloaders.items():
+        loss = model(next(dataloader).squeeze().to('cuda:0'), return_type='loss')
+        valid_losses[f'validation_loss/len{seq_len}'] = loss.item()
+    return valid_losses
+
+
+
+def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders):
 
     with trange(num_steps) as t:
         for i in t:
-            data = next(loader).squeeze()
+            data = next(dataloader).squeeze()
             optimizer.zero_grad()
             loss = model(data.to('cuda:0'), return_type='loss')
             loss.backward()
             optimizer.step()
             scheduler.step()
-            
+
+            msg = {'train_loss': loss.item()}
+
+            if i % 1000 == 0:
+                valid_losses = do_validation(model, valid_dataloaders)
+                msg.update(valid_losses)
+
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), lr=scheduler.get_last_lr())
+                t.set_postfix(loss=loss.item())
             
 
 
@@ -114,10 +170,14 @@ def main(args):
     annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
-    dataloader = CumulativeParityDataset(512, 6, 32, 1024, seed)
+    train_dataset = CumulativeParityDataset(512, 6, 32, 1024, seed)
+    valid_lengths = [32, 40, 50, 100]
+    valid_datasets = {i: CumulativeParityFixed(512, i, 512, i) for i in valid_lengths}
+    dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
+    valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
 
     try:
-        train(model, optimizer, scheduler, num_steps, dataloader)
+        train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
     except KeyboardInterrupt:
         pass
 
