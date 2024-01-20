@@ -163,7 +163,7 @@ def main(args):
     num_warmup = 1_000
     seed = 100
 
-    wandb.init(**cfg, entity='dstander', project='rasp-parities')
+    wandb.init(cfg, entity='dstander', project='rasp-parities')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
