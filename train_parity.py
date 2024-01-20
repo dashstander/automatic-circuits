@@ -144,6 +144,9 @@ def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
                 t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/100'])
             
             wandb.log(msg)
+
+            if i % 10000 == 0:
+                torch.save({'model': model.state_dict()}, 'checkpoints/{i}.pth')
             
 
 
