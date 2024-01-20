@@ -112,7 +112,7 @@ def main(args):
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01)
     warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
-    scheduler = torch.optim.lr_scheduler.SequentialLR([warmup, annealing], milestones=[num_warmup])
+    scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     dataloader = CumulativeParityDataset(512, 6, 32, 1024, seed)
 
