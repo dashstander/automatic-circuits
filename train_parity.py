@@ -2,9 +2,8 @@ import torch
 import numpy as np
 from tqdm import trange
 from transformer_lens import HookedTransformerConfig, HookedTransformer
-
 from torch.utils.data import IterableDataset, DataLoader
-
+import wandb
 
 
 def get_seq_lengths(total_length, min_length, max_length, rng):
@@ -119,7 +118,7 @@ def do_validation(model, valid_dataloaders):
     valid_losses = {}
     for seq_len, dataloader in valid_dataloaders.items():
         loss = model(next(dataloader).squeeze().to('cuda:0'), return_type='loss')
-        valid_losses[seq_len] = loss.item()
+        valid_losses[f'validation/{seq_len}'] = loss.item()
     return valid_losses
 
 
@@ -142,7 +141,9 @@ def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), valid_losses=valid_losses[100])
+                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/100'])
+            
+            wandb.log(msg)
             
 
 
@@ -151,16 +152,18 @@ def main(args):
     cfg = {
         "d_model": 128,
         "d_head": 32,
-        "n_heads": 2,
+        "n_heads": 4,
         "d_mlp": 512,
         "n_ctx": 512,
         "n_layers": 1,
         "d_vocab": 4,
         "act_fn": "relu"
     }
-    num_steps = 2_000_000
-    num_warmup = 10_000
+    num_steps = 200_000
+    num_warmup = 1_000
     seed = 100
+
+    wandb.init(**cfg, entity='dstander', project='rasp-parities')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
@@ -171,10 +174,12 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     train_dataset = CumulativeParityDataset(512, 6, 32, 1024, seed)
-    valid_lengths = [32, 40, 50, 100]
+    valid_lengths = [32, 40, 50, 60, 70, 80, 90, 100]
     valid_datasets = {i: CumulativeParityFixed(512, i, 512, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
+
+    wandb.watch(model, log='all', log_freq=200)
 
     try:
         train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
