@@ -119,7 +119,7 @@ def do_validation(model, valid_dataloaders):
     valid_losses = {}
     for seq_len, dataloader in valid_dataloaders.items():
         loss = model(next(dataloader).squeeze().to('cuda:0'), return_type='loss')
-        valid_losses[f'validation_loss/len{seq_len}'] = loss.item()
+        valid_losses[seq_len] = loss.item()
     return valid_losses
 
 
