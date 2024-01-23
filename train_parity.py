@@ -1,8 +1,10 @@
-import torch
 import numpy as np
 from tqdm import trange
 from transformer_lens import HookedTransformerConfig, HookedTransformer
+import torch
+from torch.nn.functional import log_softmax
 from torch.utils.data import IterableDataset, DataLoader
+
 import wandb
 
 
@@ -17,44 +19,45 @@ def get_seq_lengths(total_length, min_length, max_length, rng):
     
 
 def generate_cum_parity(total_seq_len: int, rng):
-    seq_len = (total_seq_len - 2) // 2
-    assert seq_len > 0, total_seq_len
-    equals = np.array([2])
-    sep = 3
-    x = rng.integers(0, 2, seq_len)
-    running_x = np.cumsum(x) % 2
-    seq = np.concatenate([x, equals, running_x], axis=0)
-    seq = np.pad(seq, (1, total_seq_len - len(seq) - 1), mode='constant', constant_values=(sep, sep))
-    return seq
+    sep = np.array([2])
+    bits = rng.integers(0, 2, total_seq_len - 1)
+    parities = np.concatenate([sep, np.cumsum(bits) % 2])
+    bits = np.concatenate([sep, bits])
+    return bits, parities
 
 
 def generate_packed_parity(total_seq_length, min_seq_length=6, max_seq_length=30, rng=None):
     if rng is None:
         rng = np.random.default_rng()
-    sep = 3
+    sep = 2
     sequence_lengths = get_seq_lengths(total_seq_length, min_seq_length, max_seq_length, rng)
     assert sum(sequence_lengths) <= total_seq_length
-    parities = [
+    [bits, parities] = list(zip(*[
             generate_cum_parity(seq_len, stream) for seq_len, stream in zip(sequence_lengths, rng.spawn(len(sequence_lengths)))
-    ]
+    ]))
+    bits = np.concatenate(bits)
     parities = np.concatenate(parities)
     diff = total_seq_length - len(parities)
-    return np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
+    bits = np.pad(bits, (0, diff), mode='constant', constant_values=(sep, sep))
+    parities = np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
+    return bits, parities
 
 
 def generate_fixed_parity(total_seq_length, seq_length=30, rng=None):
     if rng is None:
         rng = np.random.default_rng()
-    sep = 3
+    sep = 2
     sequence_lengths = [seq_length] * (total_seq_length // seq_length)
     assert sum(sequence_lengths) <= total_seq_length
-    parities = [
+    [bits, parities] = list(zip(*[
             generate_cum_parity(seq_len, stream) for seq_len, stream in zip(sequence_lengths, rng.spawn(len(sequence_lengths)))
-    ]
+    ]))
+    bits = np.concatenate(bits)
     parities = np.concatenate(parities)
     diff = total_seq_length - len(parities)
-    return np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
-
+    bits = np.pad(bits, (0, diff), mode='constant', constant_values=(sep, sep))
+    parities = np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
+    return bits, parities
 
 
 class CumulativeParityDataset(IterableDataset):
@@ -75,15 +78,15 @@ class CumulativeParityDataset(IterableDataset):
         else:
             rng = self.rng
         while True:
-            parities = [
+            [bits, parities] = list(*zip([
                 generate_packed_parity(
                     self.total_sequence_length,
                     self.min_sequence_length,
                     self.max_sequence_length,
                     stream
                 ) for stream in rng.spawn(self.batch_size)
-            ]
-            yield torch.asarray(np.stack(parities, axis=0))
+            ]))
+            yield torch.asarray(np.stack(bits, axis=0)), torch.asarray(np.stack(parities, axis=0))
 
 
 
@@ -103,33 +106,51 @@ class CumulativeParityFixed(IterableDataset):
         else:
             rng = self.rng
         while True:
-            parities = [
-                generate_fixed_parity(
+            [bits, parities] = list(*zip([
+                generate_packed_parity(
                     self.total_sequence_length,
-                    self.sequence_length,
+                    self.min_sequence_length,
+                    self.max_sequence_length,
                     stream
                 ) for stream in rng.spawn(self.batch_size)
-            ]
-            yield torch.asarray(np.stack(parities, axis=0))
+            ]))
+            yield torch.asarray(np.stack(bits, axis=0)), torch.asarray(np.stack(parities, axis=0))
+
+
+
+def cross_entropy_loss(logits, tokens, per_token: bool = False):
+    log_probs = log_softmax(logits, dim=-1)
+    # Use torch.gather to find the log probs of the correct tokens
+    # Offsets needed because we're predicting the NEXT token (this means the final logit is meaningless)
+    # None and [..., 0] needed because the tensor used in gather must have the same rank.
+    predicted_log_probs = log_probs[..., :-1, :].gather(
+        dim=-1, index=tokens[..., 1:, None]
+    )[..., 0]
+    if per_token:
+        return -predicted_log_probs
+    else:
+        return -predicted_log_probs.mean()
 
 
 @torch.no_grad()
 def do_validation(model, valid_dataloaders):
     valid_losses = {}
     for seq_len, dataloader in valid_dataloaders.items():
-        loss = model(next(dataloader).squeeze().to('cuda:0'), return_type='loss')
+        data, labels = next(dataloader)
+        logits = model(data.squeeze().to('cuda:0'), return_type='logits')
+        loss = cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
         valid_losses[f'validation/{seq_len}'] = loss.item()
     return valid_losses
-
 
 
 def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders):
 
     with trange(num_steps) as t:
         for i in t:
-            data = next(dataloader).squeeze()
+            data, labels = next(dataloader)
             optimizer.zero_grad()
-            loss = model(data.to('cuda:0'), return_type='loss')
+            logits = model(data.squeeze().to('cuda:0'), return_type='logits')
+            loss = cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
             loss.backward()
             optimizer.step()
             scheduler.step()
