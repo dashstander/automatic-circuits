@@ -167,6 +167,7 @@ def train(model, optimizer, num_steps, dataloader, valid_dataloaders):
 
             if i % 10000 == 0:
                 torch.save({'model': model.state_dict()}, 'checkpoints/{i}.pth')
+    torch.save({'model': model.state_dict()}, 'checkpoints/{i}.pth')
             
 
 
