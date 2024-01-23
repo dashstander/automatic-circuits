@@ -78,7 +78,7 @@ class CumulativeParityDataset(IterableDataset):
         else:
             rng = self.rng
         while True:
-            [bits, parities] = list(*zip([
+            [bits, parities] = list(zip(*[
                 generate_packed_parity(
                     self.total_sequence_length,
                     self.min_sequence_length,
