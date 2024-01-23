@@ -142,7 +142,7 @@ def do_validation(model, valid_dataloaders):
     return valid_losses
 
 
-def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders):
+def train(model, optimizer, num_steps, dataloader, valid_dataloaders):
 
     with trange(num_steps) as t:
         for i in t:
@@ -152,7 +152,7 @@ def train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
             loss = cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
             loss.backward()
             optimizer.step()
-            scheduler.step()
+            #scheduler.step()
 
             msg = {'train_loss': loss.item()}
 
@@ -192,9 +192,9 @@ def main(args):
     model = HookedTransformer(config)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.001)
-    warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
-    annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
-    scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
+    #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
+    #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
+    #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     train_dataset = CumulativeParityDataset(512, 6, 101, 512, seed)
     valid_lengths = [50, 100, 150, 200, 250, 300, 512]
@@ -205,7 +205,7 @@ def main(args):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, scheduler, num_steps, dataloader, valid_dataloaders)
+        train(model, optimizer, num_steps, dataloader, valid_dataloaders)
     except KeyboardInterrupt:
         pass
 
