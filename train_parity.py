@@ -122,8 +122,8 @@ def cross_entropy_loss(logits, tokens, per_token: bool = False):
     # Use torch.gather to find the log probs of the correct tokens
     # Offsets needed because we're predicting the NEXT token (this means the final logit is meaningless)
     # None and [..., 0] needed because the tensor used in gather must have the same rank.
-    predicted_log_probs = log_probs[..., :-1, :].gather(
-        dim=-1, index=tokens[..., 1:, None]
+    predicted_log_probs = log_probs[..., :, :].gather(
+        dim=-1, index=tokens[..., :, None]
     )[..., 0]
     if per_token:
         return -predicted_log_probs
