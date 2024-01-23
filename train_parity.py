@@ -117,10 +117,10 @@ class CumulativeParityFixed(IterableDataset):
 
 
 
-def cross_entropy_loss(logits, tokens, per_token: bool = False):
+def seq2seq_cross_entropy_loss(logits, tokens, per_token: bool = False):
     log_probs = log_softmax(logits, dim=-1)
     # Use torch.gather to find the log probs of the correct tokens
-    # Offsets needed because we're predicting the NEXT token (this means the final logit is meaningless)
+    # Not using offsets because we're predicting the same token position, new _sequence
     # None and [..., 0] needed because the tensor used in gather must have the same rank.
     predicted_log_probs = log_probs[..., :, :].gather(
         dim=-1, index=tokens[..., :, None]
@@ -137,7 +137,7 @@ def do_validation(model, valid_dataloaders):
     for seq_len, dataloader in valid_dataloaders.items():
         data, labels = next(dataloader)
         logits = model(data.squeeze().to('cuda:0'), return_type='logits')
-        loss = cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
+        loss = seq2seq_cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
         valid_losses[f'validation/{seq_len}'] = loss.item()
     return valid_losses
 
@@ -149,7 +149,7 @@ def train(model, optimizer, num_steps, dataloader, valid_dataloaders):
             data, labels = next(dataloader)
             optimizer.zero_grad()
             logits = model(data.squeeze().to('cuda:0'), return_type='logits')
-            loss = cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
+            loss = seq2seq_cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
             loss.backward()
             optimizer.step()
             #scheduler.step()
