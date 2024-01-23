@@ -106,7 +106,7 @@ class CumulativeParityFixed(IterableDataset):
         else:
             rng = self.rng
         while True:
-            [bits, parities] = list(*zip([
+            [bits, parities] = list(zip(*[
                 generate_fixed_parity(
                     self.total_sequence_length,
                     self.sequence_length,
