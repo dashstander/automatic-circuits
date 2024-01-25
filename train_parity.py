@@ -207,7 +207,7 @@ def main(args):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, num_steps, dataloader, valid_dataloaders)
+        train(model, optimizer, config, num_steps, dataloader, valid_dataloaders)
     except KeyboardInterrupt:
         pass
 
