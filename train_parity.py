@@ -20,7 +20,8 @@ def get_seq_lengths(total_length, min_length, max_length, rng):
 
 def generate_cum_parity(total_seq_len: int, rng):
     sep = np.array([2])
-    bits = rng.integers(0, 2, total_seq_len - 1)
+    prob = rng.beta(2, 2)
+    bits = rng.choice(2, (total_seq_len - 1,), replace=True, p=[prob, 1. - prob])
     parities = np.concatenate([sep, np.cumsum(bits) % 2])
     bits = np.concatenate([sep, bits])
     return bits, parities
@@ -142,7 +143,7 @@ def do_validation(model, valid_dataloaders):
     return valid_losses
 
 
-def train(model, optimizer, num_steps, dataloader, valid_dataloaders):
+def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 
     with trange(num_steps) as t:
         for i in t:
@@ -166,8 +167,8 @@ def train(model, optimizer, num_steps, dataloader, valid_dataloaders):
             wandb.log(msg)
 
             if i % 10000 == 0:
-                torch.save({'model': model.state_dict()}, 'checkpoints/{i}.pth')
-    torch.save({'model': model.state_dict()}, 'checkpoints/{i}.pth')
+                torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
+    torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
             
 
 
