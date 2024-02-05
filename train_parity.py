@@ -168,17 +168,17 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 
             if i % 10000 == 0:
                 torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
-    torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
+    torch.save({'model': model.state_dict(), 'config': config}, f'checkpoints/{i}.pth')
             
 
 
 def main(args):
 
     cfg = {
-        "d_model": 128,
+        "d_model": 64,
         "d_head": 32,
-        "n_heads": 4,
-        "d_mlp": 512,
+        "n_heads": 2,
+        "d_mlp": 256,
         "n_ctx": 512,
         "n_layers": 1,
         "d_vocab": 4,
