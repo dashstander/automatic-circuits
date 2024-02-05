@@ -118,7 +118,7 @@ class CumulativeParityFixed(IterableDataset):
 
 
 
-def seq2seq_cross_entropy_loss(logits, tokens, per_token: bool = False):
+def seq2seq_cross_entropy_loss(logits, tokens, ignore_token=2):
     log_probs = log_softmax(logits, dim=-1)
     # Use torch.gather to find the log probs of the correct tokens
     # Not using offsets because we're predicting the same token position, new _sequence
@@ -126,21 +126,28 @@ def seq2seq_cross_entropy_loss(logits, tokens, per_token: bool = False):
     predicted_log_probs = log_probs[..., :, :].gather(
         dim=-1, index=tokens[..., :, None]
     )[..., 0]
-    if per_token:
-        return -predicted_log_probs
-    else:
-        return -predicted_log_probs.mean()
+    
+
+    return -predicted_log_probs.mean()
+
+
+def seq2seq_accuracy(logits, tokens):
+    predicted_tok = logits.argmax(dim=-1)
+    return (predicted_tok == tokens).to(torch.float32).mean()
 
 
 @torch.no_grad()
 def do_validation(model, valid_dataloaders):
-    valid_losses = {}
+    valid_msg = {}
     for seq_len, dataloader in valid_dataloaders.items():
         data, labels = next(dataloader)
+        parities = labels.squeeze().to('cuda:0')
         logits = model(data.squeeze().to('cuda:0'), return_type='logits')
-        loss = seq2seq_cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
-        valid_losses[f'validation/{seq_len}'] = loss.item()
-    return valid_losses
+        loss = seq2seq_cross_entropy_loss(logits, parities)
+        acc = seq2seq_accuracy(logits, parities)
+        valid_msg[f'validation/loss{seq_len}'] = loss.item()
+        valid_msg[f'validation/acc{seq_len}'] = acc.item()
+    return valid_msg
 
 
 def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
@@ -165,9 +172,9 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
                 t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/100'])
             
             wandb.log(msg)
-
             if i % 10000 == 0:
-                torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
+                torch.save({'model': model.state_dict(), 'config': config}, f'checkpoints/{i}.pth')
+            
     torch.save({'model': model.state_dict(), 'config': config}, 'checkpoints/{i}.pth')
             
 
@@ -181,11 +188,11 @@ def main(args):
         "d_mlp": 512,
         "n_ctx": 512,
         "n_layers": 1,
-        "d_vocab": 4,
+        "d_vocab": 3,
         "act_fn": "relu"
     }
-    num_steps = 200_000
-    num_warmup = 1_000
+    num_steps = 100_000
+    num_warmup = 5_000
     seed = 100
 
     wandb.init(config=cfg, entity='dstander', project='rasp-parities')
@@ -198,8 +205,8 @@ def main(args):
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
-    train_dataset = CumulativeParityDataset(512, 6, 101, 512, seed)
-    valid_lengths = [50, 100, 150, 200, 250, 300, 512]
+    train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
+    valid_lengths = [64, 128, 256, 512]
     valid_datasets = {i: CumulativeParityFixed(512, i, 1024, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
