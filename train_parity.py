@@ -169,7 +169,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/100'])
+                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/acc512'])
             
             wandb.log(msg)
             if i % 10000 == 0:
