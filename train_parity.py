@@ -186,7 +186,7 @@ def main(args):
         "n_heads": 2,
         "d_mlp": 256,
         "n_ctx": 512,
-        "n_layers": 1,
+        "n_layers": 2,
         "d_vocab": 3,
         "act_fn": "relu"
     }
