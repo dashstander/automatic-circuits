@@ -169,7 +169,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['val_acc/512'])
+                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['val_acc/64'])
             
             wandb.log(msg)
             if i % 10000 == 0:
@@ -181,12 +181,12 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 def main(args):
 
     cfg = {
-        "d_model": 128,
-        "d_head": 32,
+        "d_model": 256,
+        "d_head": 64,
         "n_heads": 4,
-        "d_mlp": 512,
-        "n_ctx": 512,
-        "n_layers": 1,
+        "d_mlp": 1024,
+        "n_ctx": 64,
+        "n_layers": 2,
         "d_vocab": 3,
         "act_fn": "relu"
     }
@@ -199,15 +199,15 @@ def main(args):
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=0.001)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    train_dataset = CumulativeParityFixed(512, 512, 512, seed)
-    valid_lengths = [8, 16, 32, 64, 128, 256, 512]
-    valid_datasets = {i: CumulativeParityFixed(512, i, 1024, i) for i in valid_lengths}
+    train_dataset = CumulativeParityFixed(64, 64, 1024, seed)
+    valid_lengths = [8, 16, 32, 64]
+    valid_datasets = {i: CumulativeParityFixed(64, i, 1024, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
 
