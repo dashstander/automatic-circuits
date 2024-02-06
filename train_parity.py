@@ -145,8 +145,8 @@ def do_validation(model, valid_dataloaders):
         logits = model(data.squeeze().to('cuda:0'), return_type='logits')
         loss = seq2seq_cross_entropy_loss(logits, parities)
         acc = seq2seq_accuracy(logits, parities)
-        valid_msg[f'validation/loss{seq_len}'] = loss.item()
-        valid_msg[f'validation/acc{seq_len}'] = acc.item()
+        valid_msg[f'val_loss/{seq_len}'] = loss.item()
+        valid_msg[f'val_acc/{seq_len}'] = acc.item()
     return valid_msg
 
 
@@ -169,7 +169,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['validation/acc512'])
+                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['val_acc/512'])
             
             wandb.log(msg)
             if i % 10000 == 0:
@@ -186,7 +186,7 @@ def main(args):
         "n_heads": 2,
         "d_mlp": 256,
         "n_ctx": 512,
-        "n_layers": 1,
+        "n_layers": 2,
         "d_vocab": 3,
         "act_fn": "relu"
     }
@@ -205,7 +205,7 @@ def main(args):
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    valid_lengths = [64, 128, 256, 512]
+    valid_lengths = [8, 16, 32, 64, 128, 256, 512]
     valid_datasets = {i: CumulativeParityFixed(512, i, 1024, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
