@@ -186,7 +186,7 @@ def main(args):
         "n_heads": 2,
         "d_mlp": 256,
         "n_ctx": 512,
-        "n_layers": 2,
+        "n_layers": 1,
         "d_vocab": 3,
         "act_fn": "relu"
     }
@@ -204,7 +204,8 @@ def main(args):
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
-    train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
+    #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
+    train_dataset = CumulativeParityFixed(512, 512, 512, seed)
     valid_lengths = [8, 16, 32, 64, 128, 256, 512]
     valid_datasets = {i: CumulativeParityFixed(512, i, 1024, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
