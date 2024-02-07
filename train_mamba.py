@@ -143,7 +143,7 @@ def do_validation(model, valid_dataloaders):
     for seq_len, dataloader in valid_dataloaders.items():
         data, labels = next(dataloader)
         parities = labels.squeeze().to('cuda:0')
-        logits = model(data.squeeze().to('cuda:0'), return_type='logits')
+        logits = model(data.squeeze().to('cuda:0'))
         loss = seq2seq_cross_entropy_loss(logits, parities)
         acc = seq2seq_accuracy(logits, parities)
         valid_msg[f'val_loss/{seq_len}'] = loss.item()
@@ -157,7 +157,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
         for i in t:
             data, labels = next(dataloader)
             optimizer.zero_grad()
-            logits = model(data.squeeze().to('cuda:0'), return_type='logits')
+            logits = model(data.squeeze().to('cuda:0'))
             loss = seq2seq_cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
             loss.backward()
             optimizer.step()
@@ -184,7 +184,7 @@ def main(_):
     cfg = ModelArgs(
         d_model = 128,
         n_layer = 1,
-        vocab_size = 2,
+        vocab_size = 3,
         d_state = 128,
         expand = 2,
         dt_rank = 'auto',
