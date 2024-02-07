@@ -205,15 +205,15 @@ def main(_):
 
     model = torch.compile(base_model)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.001)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    train_dataset = CumulativeParityFixed(64, 64, 256, seed)
+    train_dataset = CumulativeParityFixed(64, 64, 512, seed)
     valid_lengths = [8, 16, 32, 64]
-    valid_datasets = {i: CumulativeParityFixed(64, i, 256, i) for i in valid_lengths}
+    valid_datasets = {i: CumulativeParityFixed(64, i, 512, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
 
