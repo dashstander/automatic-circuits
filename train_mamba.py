@@ -4,9 +4,9 @@ import torch
 from torch.nn.functional import log_softmax
 from torch.utils.data import IterableDataset, DataLoader
 
-from automatic_circuits.mamba import 
-
 import wandb
+
+from automatic_circuits.mamba import ModelArgs, Mamba
 
 
 def get_seq_lengths(total_length, min_length, max_length, rng):
@@ -179,26 +179,29 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
             
 
 
-def main(args):
+def main(_):
 
-    cfg = {
-        "d_model": 256,
-        "d_head": 64,
-        "n_heads": 4,
-        "d_mlp": 1024,
-        "n_ctx": 64,
-        "n_layers": 2,
-        "d_vocab": 3,
-        "act_fn": "relu"
-    }
+    cfg = ModelArgs(
+        d_model = 128,
+        n_layer = 1,
+        vocab_size = 2,
+        d_state = 128,
+        expand = 2,
+        dt_rank = 'auto',
+        d_conv = 2,
+        pad_vocab_size_multiple = 8,
+        conv_bias = True,
+        bias = False
+    )
     num_steps = 100_000
     num_warmup = 500
     seed = 100
 
-    wandb.init(config=cfg, entity='dstander', project='rasp-parities')
+    wandb.init(config=cfg, entity='dstander', project='mamba-parities')
 
-    config = HookedTransformerConfig(**cfg)
-    model = HookedTransformer(config)
+    
+    model = Mamba(cfg)
+    model.to('cuda:0')
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=0.001)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
@@ -215,7 +218,7 @@ def main(args):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, config, num_steps, dataloader, valid_dataloaders)
+        train(model, optimizer, cfg, num_steps, dataloader, valid_dataloaders)
     except KeyboardInterrupt:
         pass
 
