@@ -185,7 +185,7 @@ def main(_):
         d_model = 128,
         n_layer = 1,
         vocab_size = 3,
-        d_state = 128,
+        d_state = 16,
         expand = 2,
         dt_rank = 'auto',
         d_conv = 2,
@@ -200,8 +200,10 @@ def main(_):
     wandb.init(config=cfg, entity='dstander', project='mamba-parities')
 
     
-    model = Mamba(cfg)
-    model.to('cuda:0')
+    base_model = Mamba(cfg)
+    base_model.to('cuda:0')
+
+    model = torch.compile(base_model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=0.001)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
@@ -209,9 +211,9 @@ def main(_):
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    train_dataset = CumulativeParityFixed(64, 64, 1024, seed)
+    train_dataset = CumulativeParityFixed(64, 64, 256, seed)
     valid_lengths = [8, 16, 32, 64]
-    valid_datasets = {i: CumulativeParityFixed(64, i, 1024, i) for i in valid_lengths}
+    valid_datasets = {i: CumulativeParityFixed(64, i, 256, i) for i in valid_lengths}
     dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
 
