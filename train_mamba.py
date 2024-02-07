@@ -183,7 +183,7 @@ def main(_):
 
     cfg = ModelArgs(
         d_model = 128,
-        n_layer = 1,
+        n_layer = 2,
         vocab_size = 3,
         d_state = 16,
         expand = 2,
@@ -191,7 +191,7 @@ def main(_):
         d_conv = 2,
         pad_vocab_size_multiple = 8,
         conv_bias = True,
-        bias = False
+        bias = True
     )
     num_steps = 100_000
     num_warmup = 500
@@ -205,7 +205,7 @@ def main(_):
 
     model = torch.compile(base_model)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.0001)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
