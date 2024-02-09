@@ -64,7 +64,7 @@ def do_validation(model, dataloader, valid_lengths):
     return valid_msg
 
 
-def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
+def train(model, optimizer, config, num_steps, dataloader, valid_lengths):
 
     with trange(num_steps) as t:
         for i in t:
@@ -78,11 +78,11 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
             msg = {'train_loss': loss.item()}
 
             if i % 100 == 0:
-                valid_losses = do_validation(model, valid_dataloaders)
+                valid_losses = do_validation(model, dataloader, valid_lengths)
                 msg.update(valid_losses)
 
             if i % 100 == 0:
-                t.set_postfix(loss=loss.item(), valid_losses=valid_losses['val_acc/64'])
+                t.set_postfix(loss=loss.item())
             
             wandb.log(msg)
             if i % 10000 == 0:
