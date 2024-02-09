@@ -1,3 +1,4 @@
+from functools import partial
 from mamba_ssm import MambaLMHeadModel
 from mamba_ssm.models.config_mamba import MambaConfig
 import numpy as np
@@ -11,9 +12,11 @@ import wandb
 
 
 def generate_cum_addition(seq_len: int, n: int, batch_size: int):
-    probs = Dirichlet(torch.ones(n,)).sample()
-    dist = Categorical(probs)
-    summands = dist.sample((batch_size, seq_len))
+    summands = torch.empty((batch_size, seq_len))
+    for i in range(batch_size): 
+        probs = Dirichlet(torch.ones(n,)).sample()
+        dist = Categorical(probs)
+        summands[i, :] = dist.sample((seq_len,))
     sums = summands.cumsum(dim=-1) % n
     return summands, sums
 
@@ -26,9 +29,10 @@ class CumulativeAdditionGenerator:
         self.N = N
         self.batch_size = batch_size
         self.device = device
+        self.gen_fn = torch.compile(partial(generate_cum_addition, seq_len, N, batch_size))
 
     def generate(self):
-        summands, sums = generate_cum_addition(self.seq_len, self.N, self.batch_size)
+        summands, sums = self.gen_fn()
         return summands.to(self.device), sums.to(self.device)
 
 
@@ -122,7 +126,7 @@ def main(_):
     config = MambaConfig(**cfg)
     model = MambaLMHeadModel(config, device='cuda')
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.)
    
     valid_lengths = [8, 16, 32, 64]
     dataloader = CumulativeAdditionGenerator(64, 2, 512, 'cuda:0')
