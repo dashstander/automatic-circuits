@@ -11,7 +11,7 @@ import wandb
 
 
 def generate_cum_addition(seq_len: int, n: int, batch_size: int):
-    summands = torch.empty((batch_size, seq_len))
+    summands = torch.empty((batch_size, seq_len), dtype=torch.int32)
     for i in range(batch_size): 
         probs = Dirichlet(torch.ones(n,)).sample()
         dist = Categorical(probs)
