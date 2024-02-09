@@ -1,4 +1,3 @@
-from functools import partial
 from mamba_ssm import MambaLMHeadModel
 from mamba_ssm.models.config_mamba import MambaConfig
 import numpy as np
@@ -29,10 +28,10 @@ class CumulativeAdditionGenerator:
         self.N = N
         self.batch_size = batch_size
         self.device = device
-        self.gen_fn = torch.compile(partial(generate_cum_addition, seq_len, N, batch_size))
+        self.gen_fn = torch.compile(generate_cum_addition)
 
     def generate(self):
-        summands, sums = self.gen_fn()
+        summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)
         return summands.to(self.device), sums.to(self.device)
 
 
