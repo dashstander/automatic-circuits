@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
+from torch.nn.utils import clip_grad_norm_
 from torch.distributions import Dirichlet, Categorical
 
 import wandb
@@ -73,6 +74,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_lengths):
             logits = model(data).logits
             loss = seq2seq_cross_entropy_loss(logits, labels)
             loss.backward()
+            clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             msg = {'train_loss': loss.item()}
@@ -97,7 +99,7 @@ def main(_):
 
     ssm_config = {
         'd_state': 16,
-        'd_conv': 4,
+        'd_conv': 2,
         'expand': 2
     }
 
@@ -120,7 +122,7 @@ def main(_):
     config = MambaConfig(**cfg)
     model = MambaLMHeadModel(config, device='cuda')
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=0.)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.)
    
     valid_lengths = [8, 16, 32, 64]
     dataloader = CumulativeAdditionGenerator(64, 2, 512, 'cuda:0')
