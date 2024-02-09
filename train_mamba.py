@@ -1,125 +1,37 @@
+from mamba_ssm import MambaLMHeadModel
+from mamba_ssm.models.config_mamba import MambaConfig
 import numpy as np
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
-from torch.utils.data import IterableDataset, DataLoader
+from torch.distributions import Dirichlet, Categorical
 
 import wandb
 
-from automatic_circuits.mamba import ModelArgs, Mamba
+
+def generate_cum_addition(seq_len: int, n: int, batch_size: int):
+    probs = Dirichlet(torch.ones(n,)).sample()
+    dist = Categorical(probs)
+    summands = dist.sample((batch_size, seq_len))
+    sums = summands.cumsum(dim=-1) % n
+    return summands, sums
 
 
-def get_seq_lengths(total_length, min_length, max_length, rng):
-    too_many = rng.integers(min_length, max_length, min_length * total_length)
-    sequence_lengths = too_many[np.cumsum(too_many) <= total_length]
-    diff = total_length - np.sum(sequence_lengths)
-    sequence_lengths = sequence_lengths.tolist()
-    if diff >= min_length and diff <= max_length:
-        sequence_lengths += [diff]
-    return sequence_lengths
-    
 
-def generate_cum_parity(total_seq_len: int, rng):
-    sep = np.array([2])
-    prob = rng.beta(2, 2)
-    bits = rng.choice(2, (total_seq_len - 1,), replace=True, p=[prob, 1. - prob])
-    parities = np.concatenate([sep, np.cumsum(bits) % 2])
-    bits = np.concatenate([sep, bits])
-    return bits, parities
+class CumulativeAdditionGenerator:
 
-
-def generate_packed_parity(total_seq_length, min_seq_length=6, max_seq_length=30, rng=None):
-    if rng is None:
-        rng = np.random.default_rng()
-    sep = 2
-    sequence_lengths = get_seq_lengths(total_seq_length, min_seq_length, max_seq_length, rng)
-    assert sum(sequence_lengths) <= total_seq_length
-    [bits, parities] = list(zip(*[
-            generate_cum_parity(seq_len, stream) for seq_len, stream in zip(sequence_lengths, rng.spawn(len(sequence_lengths)))
-    ]))
-    bits = np.concatenate(bits)
-    parities = np.concatenate(parities)
-    diff = total_seq_length - len(parities)
-    bits = np.pad(bits, (0, diff), mode='constant', constant_values=(sep, sep))
-    parities = np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
-    return bits, parities
-
-
-def generate_fixed_parity(total_seq_length, seq_length=30, rng=None):
-    if rng is None:
-        rng = np.random.default_rng()
-    sep = 2
-    sequence_lengths = [seq_length] * (total_seq_length // seq_length)
-    assert sum(sequence_lengths) <= total_seq_length
-    [bits, parities] = list(zip(*[
-            generate_cum_parity(seq_len, stream) for seq_len, stream in zip(sequence_lengths, rng.spawn(len(sequence_lengths)))
-    ]))
-    bits = np.concatenate(bits)
-    parities = np.concatenate(parities)
-    diff = total_seq_length - len(parities)
-    bits = np.pad(bits, (0, diff), mode='constant', constant_values=(sep, sep))
-    parities = np.pad(parities, (0, diff), mode='constant', constant_values=(sep, sep))
-    return bits, parities
-
-
-class CumulativeParityDataset(IterableDataset):
-
-    def __init__(self, total_sequence_length: int, min_sequence_length: int, max_sequence_length: int, batch_size: int, rng_seed: int = 0):
-        super().__init__()
-        self.total_sequence_length = total_sequence_length
-        self.min_sequence_length = min_sequence_length
-        self.max_sequence_length = max_sequence_length
+    def __init__(self, seq_len: int, N: int, batch_size: int, device):
+        self.seq_len = seq_len
+        self.N = N
         self.batch_size = batch_size
-        self.rng = np.random.default_rng(rng_seed)
+        self.device = device
 
-    def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is not None:
-            all_rngs = [stream for stream in self.rng.spawn(worker_info.num_workers)]
-            rng = all_rngs[worker_info.id]
-        else:
-            rng = self.rng
-        while True:
-            [bits, parities] = list(zip(*[
-                generate_packed_parity(
-                    self.total_sequence_length,
-                    self.min_sequence_length,
-                    self.max_sequence_length,
-                    stream
-                ) for stream in rng.spawn(self.batch_size)
-            ]))
-            yield torch.asarray(np.stack(bits, axis=0)), torch.asarray(np.stack(parities, axis=0))
+    def generate(self):
+        summands, sums = generate_cum_addition(self.seq_len, self.N, self.batch_size)
+        return summands.to(self.device), sums.to(self.device)
 
 
-
-class CumulativeParityFixed(IterableDataset):
-    def __init__(self, total_sequence_length: int, sequence_length: int, batch_size: int, rng_seed: int = 0):
-        super().__init__()
-        self.total_sequence_length = total_sequence_length
-        self.sequence_length = sequence_length
-        self.batch_size = batch_size
-        self.rng = np.random.default_rng(rng_seed)
-
-    def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is not None:
-            all_rngs = [stream for stream in self.rng.spawn(worker_info.num_workers)]
-            rng = all_rngs[worker_info.id]
-        else:
-            rng = self.rng
-        while True:
-            [bits, parities] = list(zip(*[
-                generate_fixed_parity(
-                    self.total_sequence_length,
-                    self.sequence_length,
-                    stream
-                ) for stream in rng.spawn(self.batch_size)
-            ]))
-            yield torch.asarray(np.stack(bits, axis=0)), torch.asarray(np.stack(parities, axis=0))
-
-
-
-def seq2seq_cross_entropy_loss(logits, tokens, ignore_token=2):
+def seq2seq_cross_entropy_loss(logits, tokens):
     log_probs = log_softmax(logits, dim=-1)
     # Use torch.gather to find the log probs of the correct tokens
     # Not using offsets because we're predicting the same token position, new _sequence
@@ -127,26 +39,27 @@ def seq2seq_cross_entropy_loss(logits, tokens, ignore_token=2):
     predicted_log_probs = log_probs[..., :, :].gather(
         dim=-1, index=tokens[..., :, None]
     )[..., 0]
-    
-
     return -predicted_log_probs.mean()
 
 
 def seq2seq_accuracy(logits, tokens):
     predicted_tok = logits.argmax(dim=-1)
-    return (predicted_tok == tokens).to(torch.float32).mean()
+    correct = (predicted_tok == tokens).to(torch.float32)
+    return correct, correct.mean()
 
 
 @torch.no_grad()
-def do_validation(model, valid_dataloaders):
+def do_validation(model, dataloader, valid_lengths):
     valid_msg = {}
-    for seq_len, dataloader in valid_dataloaders.items():
-        data, labels = next(dataloader)
-        parities = labels.squeeze().to('cuda:0')
-        logits = model(data.squeeze().to('cuda:0'))
-        loss = seq2seq_cross_entropy_loss(logits, parities)
-        acc = seq2seq_accuracy(logits, parities)
-        valid_msg[f'val_loss/{seq_len}'] = loss.item()
+    data, labels = dataloader.generate()
+    parities = labels
+    logits = model(data).logits
+    predicted_tok = logits.argmax(dim=-1)
+    correct = (predicted_tok == labels).to(torch.float32)
+    #correct, acc = seq2seq_accuracy(logits, parities)
+    num_correct = correct.cumsum(dim=-1)
+    for seq_len in valid_lengths:
+        acc = num_correct[:, seq_len - 1].mean() / seq_len
         valid_msg[f'val_acc/{seq_len}'] = acc.item()
     return valid_msg
 
@@ -155,13 +68,12 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 
     with trange(num_steps) as t:
         for i in t:
-            data, labels = next(dataloader)
+            data, labels = dataloader.generate()
             optimizer.zero_grad()
-            logits = model(data.squeeze().to('cuda:0'))
-            loss = seq2seq_cross_entropy_loss(logits, labels.squeeze().to('cuda:0'))
+            logits = model(data).logits
+            loss = seq2seq_cross_entropy_loss(logits, labels)
             loss.backward()
             optimizer.step()
-            #scheduler.step()
 
             msg = {'train_loss': loss.item()}
 
@@ -181,46 +93,42 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 
 def main(_):
 
-    cfg = ModelArgs(
-        d_model = 128,
-        n_layer = 2,
-        vocab_size = 3,
-        d_state = 16,
-        expand = 2,
-        dt_rank = 'auto',
-        d_conv = 2,
-        pad_vocab_size_multiple = 8,
-        conv_bias = True,
-        bias = True
-    )
-    num_steps = 100_000
-    num_warmup = 500
+    wandb.init(entity='dstander', project='mamba-parities-sweep')
+
+    ssm_config = {
+        'd_state': 16,
+        'd_conv': 4,
+        'expand': 2
+    }
+
+    cfg = {
+        'n_layer': 2,
+        'd_model': 128,
+        'vocab_size': 2,
+        'rms_norm': True,
+        'residual_in_fp32': True,
+        'fused_add_norm':  True,
+        'pad_vocab_size_multiple': 8,
+        'ssm_cfg': ssm_config
+    }
+
+    num_steps = 500_000
+
     seed = 100
+    torch.manual_seed(seed)
 
-    wandb.init(config=cfg, entity='dstander', project='mamba-parities')
+    config = MambaConfig(**cfg)
+    model = MambaLMHeadModel(config, device='cuda')
 
-    
-    base_model = Mamba(cfg)
-    base_model.to('cuda:0')
-
-    model = torch.compile(base_model)
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.0001)
-    #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
-    #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
-    #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
-
-    #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    train_dataset = CumulativeParityFixed(64, 64, 512, seed)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=0.)
+   
     valid_lengths = [8, 16, 32, 64]
-    valid_datasets = {i: CumulativeParityFixed(64, i, 512, i) for i in valid_lengths}
-    dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
-    valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
+    dataloader = CumulativeAdditionGenerator(64, 2, 512, 'cuda:0')
 
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, cfg, num_steps, dataloader, valid_dataloaders)
+        train(model, optimizer, cfg, num_steps, dataloader, valid_lengths)
     except KeyboardInterrupt:
         pass
 

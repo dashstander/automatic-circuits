@@ -1,0 +1,7 @@
+causal-conv1d>=1.1.0
+einops
+mamba-ssm
+numpy
+polars
+tqdm
+wandb
