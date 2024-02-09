@@ -93,7 +93,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_dataloaders):
 
 def main(_):
 
-    wandb.init(entity='dstander', project='mamba-parities-sweep')
+    wandb.init(entity='dstander', project='mamba-parities')
 
     ssm_config = {
         'd_state': 16,
