@@ -1,15 +1,17 @@
 from mamba_ssm import MambaLMHeadModel
 from mamba_ssm.models.config_mamba import MambaConfig
-import numpy as np
+import math
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
 from torch.nn.utils import clip_grad_norm_
-
-from automatic_circuits.groups import SymmetricGroupGenerator, CyclicGroupGenerator
-
-
 import wandb
+
+
+from automatic_circuits.groups import CyclicGroupGenerator, SymmetricGroupGenerator
+
+
+
 
 def seq2seq_cross_entropy_loss(logits, tokens):
     log_probs = log_softmax(logits, dim=-1)
@@ -32,7 +34,6 @@ def seq2seq_accuracy(logits, tokens):
 def do_validation(model, dataloader, valid_lengths):
     valid_msg = {}
     data, labels = dataloader.generate()
-    parities = labels
     logits = model(data).logits
     predicted_tok = logits.argmax(dim=-1)
     correct = (predicted_tok == labels).to(torch.float32)
@@ -44,11 +45,11 @@ def do_validation(model, dataloader, valid_lengths):
     return valid_msg
 
 
-def train(model, optimizer, config, num_steps, dataloader, valid_lengths):
+def train(model, optimizer, config, num_steps, train_data, valid_data, valid_lengths):
 
     with trange(num_steps) as t:
         for i in t:
-            data, labels = dataloader.generate()
+            data, labels = train_data.generate()
             optimizer.zero_grad()
             logits = model(data).logits
             loss = seq2seq_cross_entropy_loss(logits, labels)
@@ -59,7 +60,7 @@ def train(model, optimizer, config, num_steps, dataloader, valid_lengths):
             msg = {'train_loss': loss.item()}
 
             if i % 100 == 0:
-                valid_losses = do_validation(model, dataloader, valid_lengths)
+                valid_losses = do_validation(model, valid_data, valid_lengths)
                 msg.update(valid_losses)
 
             if i % 100 == 0:
@@ -67,14 +68,30 @@ def train(model, optimizer, config, num_steps, dataloader, valid_lengths):
             
             wandb.log(msg)
             if i % 10000 == 0:
-                torch.save({'model': model.state_dict(), 'config': config}, f'checkpoints/{i}.pth')
-    torch.save({'model': model.state_dict(), 'config': config}, f'checkpoints/{i}.pth')
+                torch.save({
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'config': config
+                }, f'checkpoints/{i}.pth')
+    torch.save({
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'config': config
+    }, f'checkpoints/{i}.pth')
             
-
 
 def main(_):
 
-    wandb.init(entity='dstander', project='mamba-parities')
+    wandb.init(entity='dstander', project='mamba-s5')
+
+    N = 5
+    group_order = math.factorial(N)
+    train_seq_length = 64
+    valid_seq_length = 128
+    valid_lengths = [8, 16, 32, 64, 128]
+    batch_size = 512
+    num_steps = 500_000
+    seed = 100
 
     ssm_config = {
         'd_state': 16,
@@ -84,18 +101,14 @@ def main(_):
 
     cfg = {
         'n_layer': 2,
-        'd_model': 128,
-        'vocab_size': 2,
+        'd_model': 256,
+        'vocab_size': group_order,
         'rms_norm': True,
         'residual_in_fp32': True,
         'fused_add_norm':  True,
-        'pad_vocab_size_multiple': 8,
+        'pad_vocab_size_multiple': 0,
         'ssm_cfg': ssm_config
     }
-
-    num_steps = 500_000
-
-    seed = 100
     torch.manual_seed(seed)
 
     config = MambaConfig(**cfg)
@@ -103,13 +116,13 @@ def main(_):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.)
    
-    valid_lengths = [8, 16, 32, 64]
-    train_data = CyclicGroupGenerator(64, 2, 512, 'cuda:0')
+    train_data = SymmetricGroupGenerator(N, train_seq_length, batch_size)
+    valid_data =  SymmetricGroupGenerator(N, valid_seq_length, batch_size)
 
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, cfg, num_steps, train_data, valid_lengths)
+        train(model, optimizer, cfg, num_steps, train_data, valid_data, valid_lengths)
     except KeyboardInterrupt:
         pass
 
