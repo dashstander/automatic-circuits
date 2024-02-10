@@ -72,12 +72,12 @@ def train(model, optimizer, config, num_steps, train_data, valid_data, valid_len
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'config': config
-                }, f'checkpoints/{i}.pth')
+                }, f'checkpoints/s5_mamba/{i}.pth')
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
         'config': config
-    }, f'checkpoints/{i}.pth')
+    }, f'checkpoints/s5_mamba/{i}.pth')
             
 
 def main(_):
