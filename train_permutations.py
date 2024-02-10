@@ -34,9 +34,9 @@ def seq2seq_accuracy(logits, tokens):
 def do_validation(model, dataloader, valid_lengths):
     valid_msg = {}
     data, labels = dataloader.generate()
-    logits = model(data).logits
+    logits = model(data.to('cuda')).logits
     predicted_tok = logits.argmax(dim=-1)
-    correct = (predicted_tok == labels).to(torch.float32)
+    correct = (predicted_tok == labels.to('cuda')) * 1.0
     #correct, acc = seq2seq_accuracy(logits, parities)
     num_correct = correct.cumsum(dim=-1)
     for seq_len in valid_lengths:
@@ -51,8 +51,8 @@ def train(model, optimizer, config, num_steps, train_data, valid_data, valid_len
         for i in t:
             data, labels = train_data.generate()
             optimizer.zero_grad()
-            logits = model(data).logits
-            loss = seq2seq_cross_entropy_loss(logits, labels)
+            logits = model(data.to('cuda')).logits
+            loss = seq2seq_cross_entropy_loss(logits, labels.to('cuda'))
             loss.backward()
             clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
