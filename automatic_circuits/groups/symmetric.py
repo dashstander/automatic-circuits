@@ -14,7 +14,7 @@ def make_perm(sigma: list[int]):
     return torch.tensor(sigma, dtype=torch.int)
 
 def make_all_perms(N: int):
-    return torch.stack([make_perm(p) for p in permutations(range(N))], dim=1)
+    return torch.stack([make_perm(p) for p in permutations(range(N))], dim=0)
 
 def _select_perms(idx, perms):
     return torch.index_select(perms, 0, idx)
