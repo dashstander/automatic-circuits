@@ -106,7 +106,7 @@ def main(_):
         'rms_norm': True,
         'residual_in_fp32': True,
         'fused_add_norm':  True,
-        'pad_vocab_size_multiple': 0,
+        'pad_vocab_size_multiple': 8,
         'ssm_cfg': ssm_config
     }
     torch.manual_seed(seed)
