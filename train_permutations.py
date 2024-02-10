@@ -100,7 +100,7 @@ def main(_):
     }
 
     cfg = {
-        'n_layer': 2,
+        'n_layer': 4,
         'd_model': 256,
         'vocab_size': group_order,
         'rms_norm': True,

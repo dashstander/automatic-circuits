@@ -10,11 +10,14 @@ def permutation_index(x):
     descents = torch.triu((x.unsqueeze(1) > x) * 1.0).sum(dim=1)
     return torch.dot(factorials, descents).to(torch.int64)
     
+
 def make_perm(sigma: list[int]):
     return torch.tensor(sigma, dtype=torch.int64)
 
+
 def make_all_perms(N: int):
     return torch.stack([make_perm(p) for p in permutations(range(N))], dim=0)
+
 
 def _select_perms(idx, perms):
     return torch.index_select(perms, 0, idx)
@@ -31,6 +34,7 @@ def _perm_scan(perms, n):
 
 perm_scan = torch.vmap(_perm_scan, in_dims=(0, None))
 select_perms = torch.vmap(_select_perms, in_dims=(0, None))
+
 
 def generate_random_perms(Sn, seq_length, batch_dim):
     order, n = Sn.shape
