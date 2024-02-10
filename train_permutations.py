@@ -89,7 +89,7 @@ def main(_):
     train_seq_length = 64
     valid_seq_length = 128
     valid_lengths = [8, 16, 32, 64, 128]
-    batch_size = 512
+    batch_size = 1024
     num_steps = 500_000
     seed = 100
 
