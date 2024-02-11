@@ -84,11 +84,11 @@ def main(_):
 
     wandb.init(entity='dstander', project='mamba-s5')
 
-    N = 5
+    N = 4
     group_order = math.factorial(N)
-    train_seq_length = 64
-    valid_seq_length = 128
-    valid_lengths = [8, 16, 32, 64, 128]
+    train_seq_length = 128
+    valid_seq_length = 256
+    valid_lengths = [8, 16, 32, 64, 128, 256]
     batch_size = 1024
     num_steps = 500_000
     seed = 100
