@@ -86,9 +86,9 @@ def main(_):
 
     N = 4
     group_order = math.factorial(N)
-    train_seq_length = 128
-    valid_seq_length = 256
-    valid_lengths = [8, 16, 32, 64, 128, 256]
+    train_seq_length = 64
+    valid_seq_length = 128
+    valid_lengths = [8, 16, 32, 64, 128]
     batch_size = 1024
     num_steps = 500_000
     seed = 100
