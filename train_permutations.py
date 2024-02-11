@@ -72,7 +72,7 @@ def train(model, optimizer, config, num_steps, train_data, valid_data, valid_len
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'config': config
-                }, f'checkpoints/s5_mamba/{i}.pth')
+                }, f'checkpoints/s4_mamba/{i}.pth')
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
@@ -82,7 +82,7 @@ def train(model, optimizer, config, num_steps, train_data, valid_data, valid_len
 
 def main(_):
 
-    wandb.init(entity='dstander', project='mamba-s5')
+    wandb.init(entity='dstander', project='mamba-s4')
 
     N = 4
     group_order = math.factorial(N)
