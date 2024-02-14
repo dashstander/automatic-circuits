@@ -40,4 +40,4 @@ class CyclicGroupGeneratorScratchpad:
         summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)
         sums += self.N
         seq = torch.stack([summands, sums], dim=2).reshape(self.batch_size, -1)
-        return torch.stack([self.sep, seq], dim=1)
+        return torch.concatenate([self.sep, seq], dim=1)
