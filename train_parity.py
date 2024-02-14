@@ -1,5 +1,5 @@
 
-from tranformer_lens import HookedTransformerConfig, HookedTransformer
+from transformer_lens import HookedTransformerConfig, HookedTransformer
 from transformer_lens.utils import lm_accuracy, lm_loss
 from tqdm import trange
 import torch
