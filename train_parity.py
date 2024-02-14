@@ -63,8 +63,8 @@ def train(model, optimizer, config, num_steps, group):
 def main(args):
 
     N = 2
-    context = 64
-    batch_size = 512
+    context = 128
+    batch_size = 1024
 
     cfg = {
         "d_model": 256,
@@ -85,7 +85,7 @@ def main(args):
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=0.5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=1.0)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
