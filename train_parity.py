@@ -15,9 +15,9 @@ from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 @torch.no_grad()
 def do_validation(model, group):
     valid_msg = {}
-    data = group.generate()
+    data = group.generate().to('cuda')
     even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
-    logits = model(data.to('cuda:0'), return_type='logits')
+    logits = model(data, return_type='logits')
     loss = lm_cross_entropy_loss(logits, data)
     acc = lm_accuracy(logits[:, even_inds], data[:, even_inds])
     valid_msg[f'loss/validation'] = loss.item()
