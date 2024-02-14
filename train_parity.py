@@ -64,7 +64,7 @@ def main(args):
 
     N = 2
     context = 128
-    batch_size = 1024
+    batch_size = 512
 
     cfg = {
         "d_model": 256,
