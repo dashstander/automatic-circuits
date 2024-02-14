@@ -1,6 +1,6 @@
 
 from transformer_lens import HookedTransformerConfig, HookedTransformer
-from transformer_lens.utils import lm_accuracy, lm_loss
+from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
 from tqdm import trange
 import torch
 import wandb
@@ -18,7 +18,7 @@ def do_validation(model, group):
     data = group.generate()
     even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data.to('cuda:0'), return_type='logits')
-    loss = lm_loss(logits, data)
+    loss = lm_cross_entropy_loss(logits, data)
     acc = lm_accuracy(logits[:, even_inds], data[:, even_inds])
     valid_msg[f'loss/validation'] = loss.item()
     valid_msg[f'accuracy/validation'] = acc.item()
