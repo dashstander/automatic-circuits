@@ -73,7 +73,7 @@ def main(args):
         "d_mlp": 1024,
         "n_ctx": context * 2 + 1,
         "n_layers": 1,
-        "d_vocab": N * 2 + 1,
+        "d_vocab": N * 2 + 2,
         "act_fn": "relu"
     }
     num_steps = 100_000
