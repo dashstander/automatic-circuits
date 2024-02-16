@@ -8,10 +8,6 @@ import wandb
 from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 
 
-
-
-
-
 @torch.no_grad()
 def do_validation(model, group):
     valid_msg = {}
@@ -80,7 +76,7 @@ def main(args):
     num_warmup = 500
     seed = 100
 
-    wandb.init(config=cfg, entity='dstander', project='transformer-parities')
+    wandb.init(config=cfg, entity='dstander', project='transformer-adder')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
