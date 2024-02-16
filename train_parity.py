@@ -51,18 +51,18 @@ def train(model, optimizer, config, num_steps, group):
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(), 
                     'config': config
-                }, f'checkpoints/{i}.pth')
+                }, f'checkpoints/c8_transformer/{i}.pth')
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(), 
-        'config': config}, f'checkpoints/{i}.pth'
+        'config': config}, f'checkpoints/c8_transformer/{i}.pth'
     )
             
 
 
 def main(args):
 
-    N = 2
+    N = 8
     context = 128
     batch_size = 512
 
@@ -73,7 +73,7 @@ def main(args):
         "d_mlp": 1024,
         "n_ctx": context * 2 + 2,
         "n_layers": 1,
-        "d_vocab": N * 2 +1,
+        "d_vocab": N * 2 + 1,
         "act_fn": "relu"
     }
     num_steps = 100_000
@@ -91,7 +91,7 @@ def main(args):
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
 
     #train_dataset = CumulativeParityDataset(512, 64, 256, 512, seed)
-    dataset = CyclicGroupGeneratorScratchpad(context, 2, batch_size)
+    dataset = CyclicGroupGeneratorScratchpad(context, N, batch_size)
     #valid_lengths = [8, 16, 32, 64]
     #dataloader = iter(DataLoader(train_dataset, num_workers=16, pin_memory=True, prefetch_factor=4))
     #valid_dataloaders = {k: iter(DataLoader(v, num_workers=2, pin_memory=True)) for k, v in valid_datasets.items()}
