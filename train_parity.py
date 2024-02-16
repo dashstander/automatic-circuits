@@ -7,17 +7,25 @@ import wandb
 
 from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 
+def scratchpad_accuracy(logits, sequence, n):
+    labels = sequence[:, 1:][torch.where(sequence[:, 1:] >= n)]
+    preds = logits[torch.where(sequence < n)].argmax(dim=1)
+    return 1.0 * (labels == preds.argmax(dim=-1))
+
+
+
 
 @torch.no_grad()
 def do_validation(model, group):
     valid_msg = {}
     data = group.generate().to('cuda')
+    n = group.N
     #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data, return_type='logits')
     loss = lm_cross_entropy_loss(logits, data)
-    acc = lm_accuracy(logits, data)
+    acc = scratchpad_accuracy(logits, data, n)
     valid_msg[f'loss/validation'] = loss.item()
-    valid_msg[f'accuracy/validation'] = acc.item()
+    valid_msg[f'accuracy/validation'] = acc.mean().item()
     return valid_msg
 
 
