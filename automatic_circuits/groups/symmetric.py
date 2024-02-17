@@ -64,7 +64,7 @@ class SymmetricGroupGeneratorScratchpad:
         self.sequence_length = sequence_length
         self.elements = make_all_perms(N)
         self.order = len(self.elements)
-        self.sep = torch.full((batch_size, 1), N * 2)
+        self.sep = torch.full((batch_size, 1), self.order * 2)
         self.batch_size = batch_size
         self.idx_fun = torch.vmap(torch.vmap(permutation_index))
 
