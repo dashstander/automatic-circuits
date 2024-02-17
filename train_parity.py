@@ -7,6 +7,8 @@ import wandb
 
 from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 
+
+
 def scratchpad_accuracy(logits, sequence, n):
     label_mask = (sequence >= n) & (sequence != 2*n)
     pred_mask = (sequence < n) & (sequence != 2*n)

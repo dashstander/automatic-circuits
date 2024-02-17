@@ -1,2 +1,2 @@
-from .cyclic import CyclicGroupGenerator
-from .symmetric import SymmetricGroupGenerator
+from .cyclic import CyclicGroupGenerator, CyclicGroupGeneratorScratchpad
+from .symmetric import SymmetricGroupGenerator, SymmetricGroupGeneratorScratchpad

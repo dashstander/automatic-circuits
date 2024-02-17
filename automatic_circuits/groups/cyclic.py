@@ -36,6 +36,10 @@ class CyclicGroupGeneratorScratchpad:
         self.batch_size = batch_size
         self.gen_fn = torch.compile(generate_cum_addition)
 
+    @property
+    def order(self):
+        return self.N
+
     def generate(self):
         summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)
         sums += self.N

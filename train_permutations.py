@@ -1,66 +1,62 @@
-from mamba_ssm import MambaLMHeadModel
-from mamba_ssm.models.config_mamba import MambaConfig
+
 import math
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
-from torch.nn.utils import clip_grad_norm_
+from transformer_lens import HookedTransformerConfig, HookedTransformer
+from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
 import wandb
 
 
-from automatic_circuits.groups import CyclicGroupGenerator, SymmetricGroupGenerator
+from automatic_circuits.groups import SymmetricGroupGenerator, SymmetricGroupGeneratorScratchpad
 
 
 
-
-def seq2seq_cross_entropy_loss(logits, tokens):
-    log_probs = log_softmax(logits, dim=-1)
-    # Use torch.gather to find the log probs of the correct tokens
-    # Not using offsets because we're predicting the same token position, new _sequence
-    # None and [..., 0] needed because the tensor used in gather must have the same rank.
-    predicted_log_probs = log_probs[..., :, :].gather(
-        dim=-1, index=tokens[..., :, None]
-    )[..., 0]
-    return -predicted_log_probs.mean()
+def scratchpad_accuracy(logits, sequence, n):
+    label_mask = (sequence >= n) & (sequence != 2*n)
+    pred_mask = (sequence < n) & (sequence != 2*n)
+    labels = sequence[label_mask]
+    preds = logits[pred_mask, :].argmax(dim=-1)
+    return (1.0 * (labels == preds)).mean()
 
 
-def seq2seq_accuracy(logits, tokens):
-    predicted_tok = logits.argmax(dim=-1)
-    correct = (predicted_tok == tokens).to(torch.float32)
-    return correct, correct.mean()
+def batched_accuracy(logits, data, n):
+    acc = torch.zeros((logits.shape[0],), device=logits.device)
+    for i in range(logits.shape[0]):
+        acc[i] = scratchpad_accuracy(logits[i], data[i], n)
+    return acc
+        
+
+acc_fn = torch.compile(batched_accuracy)
 
 
 @torch.no_grad()
-def do_validation(model, dataloader, valid_lengths):
+def do_validation(model, group):
     valid_msg = {}
-    data, labels = dataloader.generate()
-    logits = model(data.to('cuda')).logits
-    predicted_tok = logits.argmax(dim=-1)
-    correct = (predicted_tok == labels.to('cuda')) * 1.0
-    #correct, acc = seq2seq_accuracy(logits, parities)
-    num_correct = correct.cumsum(dim=-1)
-    for seq_len in valid_lengths:
-        acc = num_correct[:, seq_len - 1].mean() / seq_len
-        valid_msg[f'val_acc/{seq_len}'] = acc.item()
+    data = group.generate().to('cuda')
+    n = group.N
+    #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
+    logits = model(data, return_type='logits')
+    loss = lm_cross_entropy_loss(logits, data)
+    acc = acc_fn(logits, data, group.order).mean()
+    valid_msg[f'loss/validation'] = loss.item()
+    valid_msg[f'accuracy/validation'] = acc.item()
     return valid_msg
 
-
-def train(model, optimizer, config, num_steps, train_data, valid_data, valid_lengths):
+def train(model, optimizer, config, num_steps, group):
 
     with trange(num_steps) as t:
         for i in t:
-            data, labels = train_data.generate()
+            data = group.generate()
             optimizer.zero_grad()
-            logits = model(data.to('cuda')).logits
-            loss = seq2seq_cross_entropy_loss(logits, labels.to('cuda'))
+            loss = model(data.to('cuda'), return_type='loss')
             loss.backward()
-            clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             msg = {'train_loss': loss.item()}
 
             if i % 100 == 0:
-                valid_losses = do_validation(model, valid_data, valid_lengths)
+                valid_losses = do_validation(model, group)
                 msg.update(valid_losses)
 
             if i % 100 == 0:
@@ -72,12 +68,12 @@ def train(model, optimizer, config, num_steps, train_data, valid_data, valid_len
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'config': config
-                }, f'checkpoints/s4_mamba/{i}.pth')
+                }, f'checkpoints/s4_transformer/{i}.pth')
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
         'config': config
-    }, f'checkpoints/s5_mamba/{i}.pth')
+    }, f'checkpoints/s4_transformer/{i}.pth')
             
 
 def main(_):
@@ -86,43 +82,36 @@ def main(_):
 
     N = 4
     group_order = math.factorial(N)
-    train_seq_length = 64
-    valid_seq_length = 128
-    valid_lengths = [8, 16, 32, 64, 128]
-    batch_size = 1024
+    context = 128
+    batch_size = 512
     num_steps = 500_000
     seed = 100
 
-    ssm_config = {
-        'd_state': 16,
-        'd_conv': 2,
-        'expand': 2
+    cfg = {
+        "d_model": 256,
+        "d_head": 64,
+        "n_heads": 4,
+        "d_mlp": 1024,
+        "n_ctx": context * 2 + 2,
+        "n_layers": 1,
+        "d_vocab": group_order * 2 + 1,
+        "act_fn": "relu"
     }
 
-    cfg = {
-        'n_layer': 4,
-        'd_model': 256,
-        'vocab_size': group_order,
-        'rms_norm': True,
-        'residual_in_fp32': True,
-        'fused_add_norm':  True,
-        'pad_vocab_size_multiple': 8,
-        'ssm_cfg': ssm_config
-    }
     torch.manual_seed(seed)
 
-    config = MambaConfig(**cfg)
-    model = MambaLMHeadModel(config, device='cuda')
+    config = HookedTransformerConfig(**cfg)
+    model = HookedTransformer(config)
+    model.to('cuda:0')
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=1.0)
    
-    train_data = SymmetricGroupGenerator(N, train_seq_length, batch_size)
-    valid_data =  SymmetricGroupGenerator(N, valid_seq_length, batch_size)
+    data = SymmetricGroupGeneratorScratchpad(N, context, batch_size)
 
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, cfg, num_steps, train_data, valid_data, valid_lengths)
+        train(model, optimizer, cfg, num_steps, data)
     except KeyboardInterrupt:
         pass
 

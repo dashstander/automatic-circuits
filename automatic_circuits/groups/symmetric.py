@@ -56,3 +56,24 @@ class SymmetricGroupGenerator:
     def generate(self):
         perms, labels = generate_random_perms(self.elements, self.sequence_length, self.batch_size)
         return self.idx_fun(perms), self.idx_fun(labels)
+    
+
+class SymmetricGroupGeneratorScratchpad:
+
+    def __init__(self, sequence_length: int, N: int, batch_size: int):
+        self.sequence_length = sequence_length
+        self.elements = make_all_perms(N)
+        self.order = len(self.elements)
+        self.sep = torch.full((batch_size, 1), N * 2)
+        self.batch_size = batch_size
+        self.idx_fun = torch.vmap(torch.vmap(permutation_index))
+
+    def generate(self):
+        perms, labels = generate_random_perms(self.elements, self.sequence_length, self.batch_size)
+        labels += self.order
+        seq = torch.stack([perms, labels], dim=2).reshape(self.batch_size, -1)
+        if torch.randn(()) > 0:
+            return torch.concatenate([self.sep, self.sep, seq], dim=1)
+        else:
+            return torch.concatenate([self.sep, seq, self.sep], dim=1)
+
