@@ -70,8 +70,10 @@ class SymmetricGroupGeneratorScratchpad:
 
     def generate(self):
         perms, labels = generate_random_perms(self.elements, self.sequence_length, self.batch_size)
-        labels += self.order
-        seq = torch.stack([perms, labels], dim=2).reshape(self.batch_size, -1)
+        perm_idx = self.idx_fun(perms)
+        label_idx = self.idx_fun(labels)
+        label_idx += self.order
+        seq = torch.stack([perm_idx, label_idx], dim=2).reshape(self.batch_size, -1)
         if torch.randn(()) > 0:
             return torch.concatenate([self.sep, self.sep, seq], dim=1)
         else:
