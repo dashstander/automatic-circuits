@@ -34,8 +34,6 @@ acc_fn = torch.compile(batched_accuracy)
 def do_validation(model, group):
     valid_msg = {}
     data = group.generate().to('cuda')
-    n = group.N
-    #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data, return_type='logits')
     loss = lm_cross_entropy_loss(logits, data)
     acc = acc_fn(logits, data, group.order).mean()
