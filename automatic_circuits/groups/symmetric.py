@@ -60,7 +60,7 @@ class SymmetricGroupGenerator:
 
 class SymmetricGroupGeneratorScratchpad:
 
-    def __init__(self, sequence_length: int, N: int, batch_size: int):
+    def __init__(self, N: int, sequence_length: int, batch_size: int):
         self.sequence_length = sequence_length
         self.elements = make_all_perms(N)
         self.order = len(self.elements)
