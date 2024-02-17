@@ -68,18 +68,18 @@ def train(model, optimizer, config, num_steps, group):
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(), 
                     'config': config
-                }, f'checkpoints/c64_transformer/{i}.pth')
+                }, f'checkpoints/c128_transformer/{i}.pth')
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(), 
-        'config': config}, f'checkpoints/c64_transformer/{i}.pth'
+        'config': config}, f'checkpoints/c128_transformer/{i}.pth'
     )
             
 
 
 def main(args):
 
-    N = 64
+    N = 128
     context = 128
     batch_size = 512
 
