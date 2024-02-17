@@ -78,7 +78,7 @@ def train(model, optimizer, config, num_steps, group):
 
 def main(_):
 
-    wandb.init(entity='dstander', project='mamba-s4')
+    wandb.init(entity='dstander', project='s4-transformer')
 
     N = 4
     group_order = math.factorial(N)
