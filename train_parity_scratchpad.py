@@ -119,7 +119,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
 
 def main(args):
 
-    N = 256
+    N = 4
     context = 128
     batch_size = 512
     seed = 0
