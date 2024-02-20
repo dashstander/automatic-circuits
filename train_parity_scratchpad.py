@@ -17,13 +17,13 @@ fs = s3fs.S3FileSystem()
 
 
 def scratchpad_loss(logits, sequence, n):
-    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n - 1))) * 1.0
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n ))) * 1.0
     totals = mask.sum(dim=-1, keepdims=True)
     losses = lm_cross_entropy_loss(logits, sequence, per_token=True)
     return ((losses * mask).sum(dim=-1) / totals).mean()
 
 def scratchpad_acc(logits, sequence, n):
-    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n - 1))) * 1.0
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n ))) * 1.0
     totals = mask.sum(dim=-1, keepdims=True)
     acc = lm_accuracy(logits, sequence, per_token=True) * 1.0
     return ((acc * mask).sum(dim=-1) / totals).mean()
