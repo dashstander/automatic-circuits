@@ -74,7 +74,7 @@ def do_validation(model, group):
     loss = scratchpad_loss(logits, data, n)
     acc = acc_fn(logits, data, n)
     valid_msg[f'loss/validation'] = loss.item()
-    valid_msg[f'accuracy/validation'] = acc.item()
+    valid_msg[f'accuracy/validation'] = acc.mean().item()
     return valid_msg
 
 
