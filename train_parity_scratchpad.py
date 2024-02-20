@@ -8,6 +8,8 @@ import wandb
 from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 
 
+from concurrent.futures import ThreadPoolExecutor
+
 
 
 fs = s3fs.S3FileSystem()
@@ -16,8 +18,9 @@ fs = s3fs.S3FileSystem()
 
 def scratchpad_loss(logits, sequence, n):
     mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n - 1))) * 1.0
+    totals = mask.sum(dim=-1, keepdims=True)
     losses = lm_cross_entropy_loss(logits, sequence, per_token=True)
-    return (losses * mask).sum(dim=-1).mean()
+    return ((losses * mask).sum(dim=-1) / totals).mean()
 
 def scratchpad_acc(logits, sequence, n):
     mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n - 1))) * 1.0
@@ -26,6 +29,18 @@ def scratchpad_acc(logits, sequence, n):
     return ((acc * mask).sum(dim=-1) / totals).mean()
 
 
+
+def save_to_s3(weights, optimizer, config, rng, bucket, step):
+    with fs.open(f'{bucket}/{step}.pth', mode='wb') as file:
+        torch.save(
+            {
+                'model': weights,
+                'optimizer': optimizer, 
+                'config': config,
+                'rng': rng
+            }, 
+            file
+        )
 
 
 """
@@ -56,7 +71,7 @@ def do_validation(model, group):
     n = group.order
     #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data, return_type='logits')
-    loss = scratchpad_loss(logits, data)
+    loss = scratchpad_loss(logits, data, n)
     acc = scratchpad_acc(logits, data, n)
     valid_msg[f'loss/validation'] = loss.item()
     valid_msg[f'accuracy/validation'] = acc.item()
@@ -64,6 +79,8 @@ def do_validation(model, group):
 
 
 def train(model, optimizer, config, num_steps, group, bucket):
+
+    executor = ThreadPoolExecutor(max_workers=20)
 
     with trange(1, num_steps + 1) as t:
         for i in t:
@@ -86,17 +103,15 @@ def train(model, optimizer, config, num_steps, group, bucket):
             
             wandb.log(msg)
             if i % 5 == 0:
-                with fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
-                    torch.save(
-                        {
-                            'model': model.state_dict(),
-                            'optimizer': optimizer.state_dict(), 
-                            'config': config,
-                            'rng': torch.random.get_rng_state()
-                        }, 
-                        file
-                    )
-            
+                executor.submit(
+                    save_to_s3,
+                    model.state_dict(),
+                    optimizer.state_dict(),
+                    config,
+                    torch.random.get_rng_state(),
+                    bucket,
+                    i
+                )
 
 
 def main(args):
