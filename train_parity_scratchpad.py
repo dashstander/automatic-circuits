@@ -43,8 +43,8 @@ def save_to_s3(weights, optimizer, config, rng, bucket, step):
         )
 
 
-"""
-def scratchpad_accuracy(logits, sequence, n):
+
+def ugly_accuracy(logits, sequence, n):
     label_mask = (sequence >= n) & (sequence != 2*n)
     pred_mask = (sequence < n) & (sequence != 2*n)
     labels = sequence[label_mask]
@@ -54,12 +54,12 @@ def scratchpad_accuracy(logits, sequence, n):
 def batched_accuracy(logits, data, n):
     acc = torch.zeros((logits.shape[0],), device=logits.device)
     for i in range(logits.shape[0]):
-        acc[i] = scratchpad_accuracy(logits[i], data[i], n)
+        acc[i] = ugly_accuracy(logits[i], data[i], n)
     return acc
         
 
 acc_fn = torch.compile(batched_accuracy)
-"""
+
 
 
 
@@ -72,7 +72,7 @@ def do_validation(model, group):
     #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data, return_type='logits')
     loss = scratchpad_loss(logits, data, n)
-    acc = scratchpad_acc(logits, data, n)
+    acc = acc_fn(logits, data, n)
     valid_msg[f'loss/validation'] = loss.item()
     valid_msg[f'accuracy/validation'] = acc.item()
     return valid_msg
