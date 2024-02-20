@@ -86,7 +86,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
             
             wandb.log(msg)
             if i % 5 == 0:
-                with s3fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
+                with fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
                     torch.save({
                         'model': model.state_dict(),
                         'optimizer': optimizer.state_dict(), 
@@ -124,7 +124,7 @@ def main(args):
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
 
-    with s3fs.open(f'{bucket}/0.pth', mode='wb') as file:
+    with fs.open(f'{bucket}/0.pth', mode='wb') as file:
         torch.save(
             {
                 'model': model.state_dict(),
