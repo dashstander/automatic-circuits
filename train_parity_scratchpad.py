@@ -105,10 +105,10 @@ def train(model, optimizer, config, num_steps, group, bucket):
 
 def main(args):
 
-    N = 128
+    N = 2
     context = 128
     batch_size = 512
-    seed = 100
+    seed = 0
     path = f'C{N}-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
     
@@ -126,7 +126,7 @@ def main(args):
     num_steps = 100_000
     num_warmup = 500
 
-    wandb.init(config=cfg, entity='dstander', project='transformer-adder')
+    wandb.init(config=cfg, entity='dstander', project='transformer-parity')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
