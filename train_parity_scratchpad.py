@@ -17,13 +17,13 @@ fs = s3fs.S3FileSystem()
 
 
 def scratchpad_loss(logits, sequence, n):
-    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n ))) * 1.0
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n))) * 1.0
     totals = mask.sum(dim=-1, keepdims=True)
     losses = lm_cross_entropy_loss(logits, sequence, per_token=True)
     return ((losses * mask).sum(dim=-1) / totals).mean()
 
 def scratchpad_acc(logits, sequence, n):
-    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n ))) * 1.0
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n))) * 1.0
     totals = mask.sum(dim=-1, keepdims=True)
     acc = lm_accuracy(logits, sequence, per_token=True) * 1.0
     return ((acc * mask).sum(dim=-1) / totals).mean()
@@ -80,6 +80,9 @@ def do_validation(model, group):
 
 def train(model, optimizer, config, num_steps, group, bucket):
 
+    msg = do_validation(model, group)
+    wandb.log(msg)
+
     executor = ThreadPoolExecutor(max_workers=20)
 
     with trange(1, num_steps + 1) as t:
@@ -116,7 +119,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
 
 def main(args):
 
-    N = 2
+    N = 256
     context = 128
     batch_size = 512
     seed = 0
@@ -137,7 +140,7 @@ def main(args):
     num_steps = 20_000
     num_warmup = 500
 
-    wandb.init(config=cfg, entity='dstander', project='transformer-parity')
+    wandb.init(config=cfg, entity='dstander', project='transformer-adder')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
