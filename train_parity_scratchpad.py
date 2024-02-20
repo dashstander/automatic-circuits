@@ -65,11 +65,11 @@ def do_validation(model, group):
 
 def train(model, optimizer, config, num_steps, group, bucket):
 
-    with trange(num_steps) as t:
+    with trange(1, num_steps + 1) as t:
         for i in t:
-            data = group.generate()
+            data = group.generate().to('cuda:0')
             optimizer.zero_grad()
-            logits = model(data.to('cuda:0'))
+            logits = model(data)
             loss = scratchpad_loss(logits, data, group.order)
             loss.backward()
             optimizer.step()
@@ -85,7 +85,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
                 t.set_postfix(loss=loss.item())
             
             wandb.log(msg)
-            if i % 2 == 0:
+            if i % 5 == 0:
                 with s3fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
                     torch.save({
                         'model': model.state_dict(),
@@ -93,13 +93,6 @@ def train(model, optimizer, config, num_steps, group, bucket):
                         'config': config
                     }, 
                     file)
-    with s3fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
-        torch.save({
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(), 
-            'config': config},
-            file
-        )
             
 
 
@@ -123,13 +116,23 @@ def main(args):
         "d_vocab": N * 2 + 1,
         "act_fn": "relu"
     }
-    num_steps = 100_000
+    num_steps = 20_000
     num_warmup = 500
 
     wandb.init(config=cfg, entity='dstander', project='transformer-parity')
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
+
+    with s3fs.open(f'{bucket}/0.pth', mode='wb') as file:
+        torch.save(
+            {
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(), 
+                'config': config
+            }, 
+            file
+        )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=1.0)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
