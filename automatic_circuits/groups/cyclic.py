@@ -4,13 +4,13 @@ from torch.distributions import Categorical, Dirichlet
 
 def generate_cum_addition(seq_len: int, n: int, batch_size: int):
     summands = torch.empty((batch_size, seq_len), dtype=torch.int32)
-    for i in range(batch_size): 
-        probs = Dirichlet(torch.ones(n,)).sample()
-        dist = Categorical(probs)
-        summands[i, :] = dist.sample((seq_len,))
+    dist = Categorical(torch.ones((n,)))
+    summands = dist.sample((batch_size, seq_len))
+    #for i in range(batch_size): 
+        #probs = Dirichlet(torch.ones(n,)).sample()
+    #summands[i, :] = dist.sample((seq_len,))
     sums = summands.cumsum(dim=-1) % n
     return summands, sums
-
 
 
 class CyclicGroupGenerator:
@@ -20,7 +20,7 @@ class CyclicGroupGenerator:
         self.N = N
         self.batch_size = batch_size
         self.device = device
-        self.gen_fn = torch.compile(generate_cum_addition)
+        self.gen_fn = generate_cum_addition
 
     def generate(self):
         summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)

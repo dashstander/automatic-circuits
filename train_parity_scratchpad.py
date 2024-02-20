@@ -1,4 +1,4 @@
-
+import s3fs
 from transformer_lens import HookedTransformerConfig, HookedTransformer
 from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
 from tqdm import trange
@@ -9,6 +9,26 @@ from automatic_circuits.groups.cyclic import CyclicGroupGeneratorScratchpad
 
 
 
+
+fs = s3fs.S3FileSystem()
+
+
+
+def scratchpad_loss(logits, sequence, n):
+    mask = ((sequence >= n) | (sequence < (2*n - 1))) * 1.0
+    losses = lm_cross_entropy_loss(logits, sequence, per_token=True)
+    return (losses * mask).sum(dim=-1).mean()
+
+def scratchpad_acc(logits, sequence, n):
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n - 1))) * 1.0
+    totals = mask.sum(dim=-1, keepdims=True)
+    acc = lm_accuracy(logits, sequence, per_token=True) * 1.0
+    return ((acc * mask).sum(dim=-1) / totals).mean()
+
+
+
+
+"""
 def scratchpad_accuracy(logits, sequence, n):
     label_mask = (sequence >= n) & (sequence != 2*n)
     pred_mask = (sequence < n) & (sequence != 2*n)
@@ -24,6 +44,7 @@ def batched_accuracy(logits, data, n):
         
 
 acc_fn = torch.compile(batched_accuracy)
+"""
 
 
 
@@ -32,23 +53,24 @@ acc_fn = torch.compile(batched_accuracy)
 def do_validation(model, group):
     valid_msg = {}
     data = group.generate().to('cuda')
-    n = group.N
+    n = group.order
     #even_inds = torch.arange(2, data.shape[1], 2).to('cuda:0')
     logits = model(data, return_type='logits')
-    loss = lm_cross_entropy_loss(logits, data)
-    acc = acc_fn(logits, data, n).mean()
+    loss = scratchpad_loss(logits, data)
+    acc = scratchpad_acc(logits, data, n)
     valid_msg[f'loss/validation'] = loss.item()
     valid_msg[f'accuracy/validation'] = acc.item()
     return valid_msg
 
 
-def train(model, optimizer, config, num_steps, group):
+def train(model, optimizer, config, num_steps, group, bucket):
 
     with trange(num_steps) as t:
         for i in t:
             data = group.generate()
             optimizer.zero_grad()
-            loss = model(data.to('cuda:0'), return_type='loss')
+            logits = model(data.to('cuda:0'))
+            loss = scratchpad_loss(logits, data, group.order)
             loss.backward()
             optimizer.step()
             #scheduler.step()
@@ -63,17 +85,21 @@ def train(model, optimizer, config, num_steps, group):
                 t.set_postfix(loss=loss.item())
             
             wandb.log(msg)
-            if i % 10000 == 0:
-                torch.save({
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(), 
-                    'config': config
-                }, f'checkpoints/c128_transformer/{i}.pth')
-    torch.save({
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(), 
-        'config': config}, f'checkpoints/c128_transformer/{i}.pth'
-    )
+            if i % 2 == 0:
+                with s3fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
+                    torch.save({
+                        'model': model.state_dict(),
+                        'optimizer': optimizer.state_dict(), 
+                        'config': config
+                    }, 
+                    file)
+    with s3fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
+        torch.save({
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(), 
+            'config': config},
+            file
+        )
             
 
 
@@ -82,6 +108,10 @@ def main(args):
     N = 128
     context = 128
     batch_size = 512
+    seed = 100
+    path = f'C{N}-{seed}'
+    bucket = f's3://automatic-circuits-01/{path}'
+    
 
     cfg = {
         "d_model": 256,
@@ -95,7 +125,6 @@ def main(args):
     }
     num_steps = 100_000
     num_warmup = 500
-    seed = 100
 
     wandb.init(config=cfg, entity='dstander', project='transformer-adder')
 
@@ -116,7 +145,7 @@ def main(args):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, config, num_steps, dataset)
+        train(model, optimizer, config, num_steps, dataset, bucket)
     except KeyboardInterrupt:
         pass
 
