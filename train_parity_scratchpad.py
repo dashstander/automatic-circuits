@@ -87,12 +87,15 @@ def train(model, optimizer, config, num_steps, group, bucket):
             wandb.log(msg)
             if i % 5 == 0:
                 with fs.open(f'{bucket}/{i}.pth', mode='wb') as file:
-                    torch.save({
-                        'model': model.state_dict(),
-                        'optimizer': optimizer.state_dict(), 
-                        'config': config
-                    }, 
-                    file)
+                    torch.save(
+                        {
+                            'model': model.state_dict(),
+                            'optimizer': optimizer.state_dict(), 
+                            'config': config,
+                            'rng': torch.random.get_rng_state()
+                        }, 
+                        file
+                    )
             
 
 
@@ -123,18 +126,20 @@ def main(args):
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=1.0)
+
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
         torch.save(
             {
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(), 
-                'config': config
+                'config': config,
+                'rng': torch.random.get_rng_state()
             }, 
             file
         )
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0002, weight_decay=1.0)
     #warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.001, end_factor=1.0, total_iters=num_warmup)
     #annealing = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(num_steps - num_warmup), eta_min=1.0e-6)
     #scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, annealing], milestones=[num_warmup])
