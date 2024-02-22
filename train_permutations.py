@@ -1,15 +1,39 @@
 
 import math
+import s3fs
 from tqdm import trange
 import torch
-from torch.nn.functional import log_softmax
 from transformer_lens import HookedTransformerConfig, HookedTransformer
-from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
+from transformer_lens.utils import lm_cross_entropy_loss
 import wandb
+from automatic_circuits.groups import SymmetricGroupGeneratorScratchpad
 
 
-from automatic_circuits.groups import SymmetricGroupGenerator, SymmetricGroupGeneratorScratchpad
+from concurrent.futures import ThreadPoolExecutor
 
+
+
+fs = s3fs.S3FileSystem()
+
+
+def save_to_s3(weights, optimizer, config, rng, bucket, step):
+    with fs.open(f'{bucket}/{step}.pth', mode='wb') as file:
+        torch.save(
+            {
+                'model': weights,
+                'optimizer': optimizer, 
+                'config': config,
+                'rng': rng
+            }, 
+            file
+        )
+
+
+def scratchpad_loss(logits, sequence, n):
+    mask = ((sequence[:, 1:] >= n) | (sequence[:, 1:] < (2*n))) * 1.0
+    totals = mask.sum(dim=-1, keepdims=True)
+    losses = lm_cross_entropy_loss(logits, sequence, per_token=True)
+    return ((losses * mask).sum(dim=-1) / totals).mean()
 
 
 def scratchpad_accuracy(logits, sequence, n):
@@ -41,19 +65,27 @@ def do_validation(model, group):
     valid_msg[f'accuracy/validation'] = acc.item()
     return valid_msg
 
-def train(model, optimizer, config, num_steps, group):
 
-    with trange(num_steps) as t:
+
+def train(model, optimizer, config, num_steps, group, bucket):
+
+    msg = do_validation(model, group)
+    wandb.log(msg)
+
+    executor = ThreadPoolExecutor(max_workers=20)
+
+    with trange(1, num_steps + 1) as t:
         for i in t:
-            data = group.generate()
+            data = group.generate().to('cuda:0')
             optimizer.zero_grad()
-            loss = model(data.to('cuda'), return_type='loss')
+            logits = model(data.to('cuda'))
+            loss = scratchpad_loss(logits, data, group.order)
             loss.backward()
             optimizer.step()
 
             msg = {'train_loss': loss.item()}
 
-            if i % 100 == 0:
+            if i % 50 == 0:
                 valid_losses = do_validation(model, group)
                 msg.update(valid_losses)
 
@@ -61,17 +93,17 @@ def train(model, optimizer, config, num_steps, group):
                 t.set_postfix(loss=loss.item())
             
             wandb.log(msg)
-            if i % 10000 == 0:
-                torch.save({
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'config': config
-                }, f'checkpoints/s4_transformer/{i}.pth')
-    torch.save({
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'config': config
-    }, f'checkpoints/s4_transformer/{i}.pth')
+            if i % 5 == 0:
+                executor.submit(
+                    save_to_s3,
+                    model.state_dict(),
+                    optimizer.state_dict(),
+                    config,
+                    torch.random.get_rng_state(),
+                    bucket,
+                    i
+                )
+
             
 
 def main(_):
@@ -82,8 +114,10 @@ def main(_):
     group_order = math.factorial(N)
     context = 128
     batch_size = 512
-    num_steps = 500_000
-    seed = 100
+    num_steps = 100_000
+    seed = 0
+    path = f'S{N}-{seed}'
+    bucket = f's3://automatic-circuits-01/{path}'
 
     cfg = {
         "d_model": 256,
@@ -109,7 +143,7 @@ def main(_):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, cfg, num_steps, data)
+        train(model, optimizer, cfg, num_steps, data, bucket)
     except KeyboardInterrupt:
         pass
 
