@@ -15,11 +15,10 @@ def generate_cum_addition(seq_len: int, n: int, batch_size: int):
 
 class CyclicGroupGenerator:
 
-    def __init__(self, seq_len: int, N: int, batch_size: int, device):
+    def __init__(self, seq_len: int, N: int, batch_size: int):
         self.seq_len = seq_len
         self.N = N
         self.batch_size = batch_size
-        self.device = device
         self.gen_fn = generate_cum_addition
     
     @property
