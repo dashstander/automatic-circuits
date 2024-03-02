@@ -97,11 +97,11 @@ def train(model, optimizer, config, num_steps, group, bucket):
 
             msg = {'loss/train': loss.item()}
 
-            if i % 100 == 0:
+            if i % 10 == 0:
                 valid = do_validation(model, group)
                 msg.update(valid)
 
-            if i % 100 == 0:
+            if i % 10 == 0:
                 t.set_postfix(loss=loss.item())
             
             wandb.log(msg)

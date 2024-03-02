@@ -1,5 +1,5 @@
 import torch
-from torch.distributions import Categorical, Dirichlet
+from torch.distributions import Categorical
 
 
 def generate_cum_addition(seq_len: int, n: int, batch_size: int):
@@ -21,10 +21,14 @@ class CyclicGroupGenerator:
         self.batch_size = batch_size
         self.device = device
         self.gen_fn = generate_cum_addition
+    
+    @property
+    def order(self):
+        return self.N
 
     def generate(self):
         summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)
-        return summands.to(self.device), sums.to(self.device)
+        return summands, sums
     
 
 class CyclicGroupGeneratorScratchpad:

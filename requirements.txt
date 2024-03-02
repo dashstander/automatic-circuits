@@ -1,7 +1,7 @@
-causal-conv1d>=1.1.0
 einops
-mamba-ssm
 numpy
 polars
+transformer-lens
+s3fs
 tqdm
 wandb
