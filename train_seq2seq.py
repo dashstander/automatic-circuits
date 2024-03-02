@@ -103,9 +103,9 @@ def main(_):
     wandb.init(entity='dstander', project='transformer-parities-seq2seq')
 
     N = 2
-    context = 32
+    context = 64
     batch_size = 2048
-    seed = 0
+    seed = 1
     path = f'C{N}-seq2seq-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
     
@@ -120,7 +120,7 @@ def main(_):
         "d_vocab": N,
         "act_fn": "relu"
     }
-    num_steps = 100_000
+    num_steps = 20_000
 
     torch.manual_seed(seed)
 
@@ -128,7 +128,7 @@ def main(_):
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00003, weight_decay=0.0)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00002, weight_decay=0.0)
 
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
