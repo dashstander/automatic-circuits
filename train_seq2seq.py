@@ -60,7 +60,7 @@ def do_validation(model, group):
     return valid_msg
 
 
-def train(model, optimizer, config, num_steps, group, bucket):
+def train(model, optimizer, scheduler, config, num_steps, group, bucket):
 
     msg = do_validation(model, group)
     wandb.log(msg)
@@ -76,6 +76,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
             loss.backward()
             clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
+            scheduler.step()
 
             msg = {'loss/train': loss.item()}
 
@@ -130,7 +131,8 @@ def main(_):
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00002, weight_decay=0.0)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-6)
 
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
@@ -150,7 +152,7 @@ def main(_):
     wandb.watch(model, log='all', log_freq=200)
 
     try:
-        train(model, optimizer, config, num_steps, dataset, bucket)
+        train(model, optimizer, scheduler, config, num_steps, dataset, bucket)
     except KeyboardInterrupt:
         pass
 
