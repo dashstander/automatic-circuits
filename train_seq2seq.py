@@ -5,6 +5,7 @@ import s3fs
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
+from torch.nn.utils import clip_grad_norm_
 from transformer_lens import HookedTransformerConfig, HookedTransformer
 from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
 import wandb
@@ -73,6 +74,7 @@ def train(model, optimizer, config, num_steps, group, bucket):
             logits = model(data, return_type='logits')
             loss = seq2seq_cross_entropy_loss(logits, labels)
             loss.backward()
+            clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             msg = {'loss/train': loss.item()}
