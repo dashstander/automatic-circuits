@@ -100,11 +100,11 @@ def train(model, optimizer, config, num_steps, group, bucket):
 
 def main(_):
 
-    wandb.init(entity='dstander', project='mamba-parities')
+    wandb.init(entity='dstander', project='transformer-parities-seq2seq')
 
     N = 2
     context = 32
-    batch_size = 1024
+    batch_size = 2048
     seed = 0
     path = f'C{N}-seq2seq-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
@@ -128,7 +128,7 @@ def main(_):
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00003, weight_decay=0.0)
 
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
