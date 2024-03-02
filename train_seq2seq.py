@@ -43,22 +43,7 @@ def seq2seq_cross_entropy_loss(logits, tokens):
 def seq2seq_accuracy(logits, tokens):
     predicted_tok = logits.argmax(dim=-1)
     correct = (predicted_tok == tokens).to(torch.float32)
-    return correct, correct.mean()
-
-
-@torch.no_grad()
-def do_validation(model, dataloader, valid_lengths):
-    valid_msg = {}
-    data, labels = dataloader.generate()
-    logits = model(data).logits
-    predicted_tok = logits.argmax(dim=-1)
-    correct = (predicted_tok == labels).to(torch.float32)
-    #correct, acc = seq2seq_accuracy(logits, parities)
-    num_correct = correct.cumsum(dim=-1)
-    for seq_len in valid_lengths:
-        acc = num_correct[:, seq_len - 1].mean() / seq_len
-        valid_msg[f'val_acc/{seq_len}'] = acc.item()
-    return valid_msg
+    return correct.mean()
 
 
 @torch.no_grad()
@@ -70,7 +55,7 @@ def do_validation(model, group):
     loss = seq2seq_cross_entropy_loss(logits, labels)
     acc = seq2seq_accuracy(logits, labels)
     valid_msg[f'loss/validation'] = loss.item()
-    valid_msg[f'accuracy/validation'] = acc.mean().item()
+    valid_msg[f'accuracy/validation'] = acc.item()
     return valid_msg
 
 
