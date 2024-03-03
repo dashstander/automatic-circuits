@@ -118,9 +118,9 @@ def main(_):
         "d_head": 64,
         "n_heads": 4,
         "d_mlp": 1024,
-        "n_ctx": context,
+        "n_ctx": context + 1,
         "n_layers": 2,
-        "d_vocab": N,
+        "d_vocab": N + 1,
         "act_fn": "relu"
     }
     num_steps = 20_000
