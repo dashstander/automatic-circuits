@@ -108,7 +108,7 @@ def main(_):
     N = 2
     context = 64
     batch_size = 2048
-    seed = 1
+    seed = 2
     path = f'C{N}-seq2seq-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
     

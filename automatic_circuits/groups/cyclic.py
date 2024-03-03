@@ -19,15 +19,18 @@ class CyclicGroupGenerator:
         self.seq_len = seq_len
         self.N = N
         self.batch_size = batch_size
-        self.gen_fn = generate_cum_addition
-    
-    @property
-    def order(self):
-        return self.N
+        self.gen_fn = torch.compile(generate_cum_addition)
+        self.sep = torch.full((batch_size, 1), N * 2)
+
+    def _add_sep(self, tensors):
+        return tuple([
+          torch.concatenate([self.sep, tensor], dim=1) for tensor in tensors  
+        ])
 
     def generate(self):
-        summands, sums = self.gen_fn(self.seq_len, self.N, self.batch_size)
-        return summands, sums
+        return self._add_sep(
+            self.gen_fn(self.seq_len, self.N, self.batch_size)
+        )
     
 
 class CyclicGroupGeneratorScratchpad:
