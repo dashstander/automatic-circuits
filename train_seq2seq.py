@@ -117,7 +117,7 @@ def main(_):
     N = 2
     layers = 4
     context = 64
-    batch_size = 512
+    batch_size = 1024
     seed = 0
     path = f'C{N}-seq2seq-{layers}-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
