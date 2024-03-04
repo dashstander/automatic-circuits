@@ -1,19 +1,20 @@
 
 
 from concurrent.futures import ThreadPoolExecutor
+from einops._torch_specific import allow_ops_in_compiled_graph  # requires einops>=0.6.1
 import s3fs 
 from tqdm import trange
 import torch
 from torch.nn.functional import log_softmax
 from torch.nn.utils import clip_grad_norm_
 from transformer_lens import HookedTransformerConfig, HookedTransformer
-from transformer_lens.utils import lm_accuracy, lm_cross_entropy_loss
 import wandb
 
 
 from automatic_circuits.groups import CyclicGroupGenerator
 
 
+allow_ops_in_compiled_graph()
 fs = s3fs.S3FileSystem()
 
 
@@ -133,7 +134,8 @@ def main(_):
     wandb.init(config=cfg, entity='dstander', project='transformer-parity-seq2seq')
 
     config = HookedTransformerConfig(**cfg)
-    model = HookedTransformer(config)
+    _model = HookedTransformer(config)
+    model = torch.compile(_model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-7)
 
