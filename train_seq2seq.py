@@ -62,8 +62,8 @@ def do_validation(model, group):
 
 
 def train(model, optimizer, scheduler, config, num_steps, group, bucket):
-    model_fn = torch.compile(model)
-    msg = do_validation(model_fn, group)
+    #model_fn = torch.compile(model)
+    msg = do_validation(model, group)
     wandb.log(msg)
 
     executor = ThreadPoolExecutor(max_workers=20)
@@ -72,7 +72,7 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
         for i in t:
             data, labels = [tensor.to('cuda') for tensor in group.generate()]
             optimizer.zero_grad()
-            logits = model_fn(data, return_type='logits')
+            logits = model(data, return_type='logits')
             loss = seq2seq_cross_entropy_loss(logits, labels)
             loss.backward()
             clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -82,7 +82,7 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
             msg = {'loss/train': loss.item()}
 
             if i % 10 == 0:
-                valid_losses = do_validation(model_fn, group)
+                valid_losses = do_validation(model, group)
                 msg.update(valid_losses)
 
             if i % 10 == 0:
