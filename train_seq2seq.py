@@ -13,7 +13,7 @@ import wandb
 
 from automatic_circuits.groups import CyclicGroupGenerator
 
-
+torch.set_float32_matmul_precision('high')
 allow_ops_in_compiled_graph()
 fs = s3fs.S3FileSystem()
 
@@ -62,8 +62,8 @@ def do_validation(model, group):
 
 
 def train(model, optimizer, scheduler, config, num_steps, group, bucket):
-
-    msg = do_validation(model, group)
+    model_fn = torch.compile(model)
+    msg = do_validation(model_fn, group)
     wandb.log(msg)
 
     executor = ThreadPoolExecutor(max_workers=20)
@@ -72,7 +72,7 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
         for i in t:
             data, labels = [tensor.to('cuda') for tensor in group.generate()]
             optimizer.zero_grad()
-            logits = model(data, return_type='logits')
+            logits = model_fn(data, return_type='logits')
             loss = seq2seq_cross_entropy_loss(logits, labels)
             loss.backward()
             clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -82,14 +82,14 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
             msg = {'loss/train': loss.item()}
 
             if i % 10 == 0:
-                valid_losses = do_validation(model, group)
+                valid_losses = do_validation(model_fn, group)
                 msg.update(valid_losses)
 
             if i % 10 == 0:
                 t.set_postfix(loss=loss.item())
             
             wandb.log(msg)
-            if i % 5 == 0:
+            if i % 100 == 0:
                 executor.submit(
                     save_to_s3,
                     model.state_dict(),
@@ -134,10 +134,9 @@ def main(_):
     wandb.init(config=cfg, entity='dstander', project='transformer-parity-seq2seq')
 
     config = HookedTransformerConfig(**cfg)
-    _model = HookedTransformer(config)
-    model = torch.compile(_model)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.01)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-7)
+    model = HookedTransformer(config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001, weight_decay=0.01)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-6)
 
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
