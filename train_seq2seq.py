@@ -103,13 +103,14 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
 
 def main(_):
 
-    wandb.init(entity='dstander', project='transformer-parities-seq2seq')
+    
 
     N = 2
+    layers = 4
     context = 64
-    batch_size = 2048
-    seed = 2
-    path = f'C{N}-seq2seq-{seed}'
+    batch_size = 512
+    seed = 0
+    path = f'C{N}-seq2seq-{layers}-{seed}'
     bucket = f's3://automatic-circuits-01/{path}'
     
 
@@ -119,11 +120,13 @@ def main(_):
         "n_heads": 4,
         "d_mlp": 1024,
         "n_ctx": context + 1,
-        "n_layers": 2,
+        "n_layers": layers,
         "d_vocab": N + 1,
         "act_fn": "relu"
     }
     num_steps = 20_000
+
+    wandb.init(config=cfg, entity='dstander', project='transformer-parities-seq2seq')
 
     torch.manual_seed(seed)
 
