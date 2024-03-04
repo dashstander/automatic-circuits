@@ -134,8 +134,8 @@ def main(_):
 
     config = HookedTransformerConfig(**cfg)
     model = HookedTransformer(config)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001, weight_decay=0.0)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.00001, weight_decay=0.01)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1.0e-7)
 
 
     with fs.open(f'{bucket}/0.pth', mode='wb') as file:
@@ -149,7 +149,6 @@ def main(_):
             file
         )
 
-    
     dataset = CyclicGroupGenerator(context, N, batch_size)
     
     wandb.watch(model, log='all', log_freq=200)
