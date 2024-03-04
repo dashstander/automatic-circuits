@@ -99,6 +99,14 @@ def train(model, optimizer, scheduler, config, num_steps, group, bucket):
                     bucket,
                     i
                 )
+    save_to_s3(
+        model.state_dict(),
+        optimizer.state_dict(),
+        config,
+        torch.random.get_rng_state(),
+        bucket,
+        i
+    )
             
 
 
